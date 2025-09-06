@@ -230,6 +230,12 @@ class StockListDB:
             cursor.executemany(insert_sql, data_tuples)
             logger.info(f"成功插入 {len(data_tuples)} 条记录")
 
+            # 单独增加sz43和sz46数据，二者在现在已经不存在()
+            data_tuple = ('主版', None, None, None, '43', '中航善达', None, None, None, None, None, None, None, None, 'K 房地产', None, None, None, None)
+            cursor.execute(insert_sql, data_tuple)
+            data_tuple = ('主版', None, None, None, '46', '*ST泛海', None, None, None, None, None, None, None, None, 'K 房地产', None, None, None, None)
+            cursor.execute(insert_sql, data_tuple)
+
             update_sql = """
                 UPDATE stock_list SET b_stock_code=NULL WHERE b_stock_code='NaN';
                 UPDATE stock_list SET b_total_shares=NULL WHERE b_total_shares=0;

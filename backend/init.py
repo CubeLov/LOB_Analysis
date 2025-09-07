@@ -9,6 +9,7 @@ import numpy as np
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 import logging
 import os
+import json
 from typing import Optional
 
 # 配置日志
@@ -252,14 +253,12 @@ class StockListDB:
 
 def main():
     """主函数"""
-    # 数据库连接配置 - 请根据实际情况修改
-    db_config = {
-        'host': 'localhost',
-        'port': 5432,
-        'database': 'lob_analysis',
-        'user': 'lob_admin',
-        'password': 'admin'
-    }
+    # 数据库连接配置
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    json_path = os.path.join(script_dir, 'db.json')
+
+    with open(json_path, 'r') as f:
+        db_config = json.load(f)
     
     # CSV 文件路径
     csv_file_path = os.path.join(os.path.dirname(__file__), 'SZ100data', 'StockList.csv')

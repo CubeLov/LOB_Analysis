@@ -166,3 +166,94 @@ def get_stock_info(stock_code: str):
             "error": "服务器内部错误",
             "message": str(e)
         }), 500
+
+@stock_bp.route('/coordinates/cluster', methods=['POST'])
+def get_umap_coordinates_cluster():
+    """
+    获取UMAP坐标并进行聚类分析的API接口
+    
+    请求格式:
+    {
+        "stock_codes": ["000001", "000002", "000007"],
+        "time_step": 100
+    }
+    
+    响应格式:
+    {
+        "time_step": 100,
+        "coordinates": {
+            "000001": {
+                "umap1": -2.5123,
+                "umap2": 1.2345,
+                "time_step": 100,
+                "cluster_id": 0,
+            },
+            "000002": {
+                "umap1": -1.8765,
+                "umap2": 2.1234,
+                "time_step": 100,
+                "cluster_id": 1,
+            }
+        },
+        "cluster_info": {
+            "n_clusters": 2,
+            "cluster_centers": [[-2.5123, 1.2345], [-1.8765, 2.1234]],
+            "algorithm": "AffinityPropagation"
+        },
+        "errors": {
+            "000007": "时间步100无数据"
+        }
+    }
+    """
+    try:
+        # 检查服务是否初始化
+        if umap_service is None:
+            return jsonify({
+                "error": "服务未初始化",
+                "message": "UMAP服务未正确初始化"
+            }), 500
+            
+        # 获取请求数据
+        request_data = request.get_json()
+        
+        # 验证请求格式
+        if not request_data:
+            return jsonify({
+                "error": "请求体不能为空",
+                "message": "请提供JSON格式的请求数据"
+            }), 400
+        
+        stock_codes = request_data.get('stock_codes', [])
+        time_step = request_data.get('time_step')
+        
+        # 验证参数
+        if not isinstance(stock_codes, list) or len(stock_codes) == 0:
+            return jsonify({
+                "error": "stock_codes参数错误",
+                "message": "stock_codes必须是非空的字符串列表"
+            }), 400
+        
+        if not isinstance(time_step, int) or time_step < 0:
+            return jsonify({
+                "error": "time_step参数错误", 
+                "message": "time_step必须是非负整数"
+            }), 400
+        
+        # 调用服务获取坐标和聚类结果
+        result = umap_service.get_coordinates_cluster(stock_codes, time_step)
+        
+        # 添加请求信息
+        result["request_info"] = {
+            "total_requested": len(stock_codes),
+            "successful": len(result["coordinates"]),
+            "failed": len(result["errors"])
+        }
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"处理聚类坐标查询请求失败: {e}")
+        return jsonify({
+            "error": "服务器内部错误",
+            "message": str(e)
+        }), 500

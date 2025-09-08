@@ -4,6 +4,7 @@
 
 from .health_routes import health_bp
 from .stock_routes import stock_bp
+from .time_routes import time_bp
 
 # 导出所有蓝图
-__all__ = ['health_bp', 'stock_bp']
+__all__ = ['health_bp', 'stock_bp', 'time_bp']

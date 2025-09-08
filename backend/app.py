@@ -12,7 +12,7 @@ import json
 # 导入配置和服务
 from database import DatabaseManager
 from services import UMAPCoordinateService
-from routes import health_bp, stock_bp
+from routes import health_bp, stock_bp, time_bp
 from routes.stock_routes import init_service
 
 # 配置日志
@@ -43,6 +43,7 @@ def create_app():
     # 注册蓝图
     app.register_blueprint(health_bp)
     app.register_blueprint(stock_bp)
+    app.register_blueprint(time_bp)
     
     # 全局错误处理器
     @app.errorhandler(404)

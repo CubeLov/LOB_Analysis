@@ -28,8 +28,8 @@ class TimeService:
             具体时间字符串，格式为"YYYY-MM-DD HH:MM:SS"
         """
         
-        # 每天总共49个时间步：1个盘前 + 24个上午 + 24个下午
-        steps_per_day = 49
+        # 每天总共50个时间步：1个盘前 + 24个上午 + 24个下午 + 1个盘后
+        steps_per_day = 50
         
         # 计算是第几天和当天内的步数
         day_offset = time_step // steps_per_day
@@ -47,8 +47,11 @@ class TimeService:
             minutes_from_930 = (step_in_day - 1) * 5
             result_time = current_date.replace(hour=9, minute=30, second=0) + timedelta(minutes=minutes_from_930)
         elif 25 <= step_in_day <= 48:
-            # 下午交易时段 13:00-15:00
-            minutes_from_1300 = (step_in_day - 25) * 5
-            result_time = current_date.replace(hour=13, minute=0, second=0) + timedelta(minutes=minutes_from_1300)
+            # 下午交易时段 12:57-14:57
+            minutes_from_1257 = (step_in_day - 25) * 5
+            result_time = current_date.replace(hour=12, minute=57, second=0) + timedelta(minutes=minutes_from_1257)
+        else:
+            # 盘后时间
+            result_time = current_date.replace(hour=15, minute=0, second=0)
         
         return result_time.strftime("%Y-%m-%d %H:%M:%S")

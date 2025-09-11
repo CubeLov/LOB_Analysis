@@ -1,18 +1,72 @@
 <template>
-  <div>
-    <StockSelect :stocks="stocks" @update-selected-stocks="setSelectedStocks" />
-    <TimeSelect @update-time-step="setTimeStep" />
-    <QueryButton @query-clicked="onQueryClicked" />
-    <PlaybackButton @playback-clicked="onPlaybackClicked" />
-    <StockChart :coordinates="coordinates" :clusterInfo="clusterInfo" />
+  <div class="home-container">
+    <div class="control-panel">
+      <h2>LOB Analysis Dashboard</h2>
+      
+      <div class="status-info">
+        <p>股票总数: {{ stocks.length }}</p>
+        <p>已选择: {{ selectedStocks.length }}</p>
+        <p>聚类状态: {{ clustersGenerated ? '已生成' : '未生成' }}</p>
+        <p>当前时间步: {{ currentTimeStep }}</p>
+      </div>
+
+      <div class="control-section">
+        <h3>1. 股票选择</h3>
+        <StockSelect :stocks="stocks" @update-selected-stocks="setSelectedStocks" />
+      </div>
+      
+      <div class="control-section">
+        <h3>2. 聚类配置</h3>
+        <div class="cluster-config">
+          <label for="cluster-timestep">聚类基础时间步：</label>
+          <input 
+            type="number" 
+            id="cluster-timestep" 
+            v-model="clusterBaseTimeStep" 
+            min="0" 
+            max="100"
+            @change="onClusterBaseChange"
+          />
+          <button @click="generateClusters" :disabled="!selectedStocks.length">生成聚类</button>
+        </div>
+      </div>
+
+      <div class="control-section">
+        <h3>3. 时间范围选择</h3>
+        <TimeSelect 
+          @update-time-range="setTimeRange" 
+          :cluster-base="clusterBaseTimeStep"
+        />
+      </div>
+
+      <div class="control-section">
+        <h3>4. 播放控制</h3>
+        <div class="control-buttons">
+          <PlaybackButton 
+            @playback-clicked="onPlaybackClicked" 
+            @stop-playback="stopPlayback"
+            :is-playing="isPlaying"
+            :disabled="!clustersGenerated"
+          />
+        </div>
+      </div>
+    </div>
+
+    <div class="chart-section">
+      <StockChart 
+        :coordinates="coordinates" 
+        :clusterInfo="clusterInfo" 
+        :currentTimeStep="currentTimeStep"
+        :selectedStocks="selectedStocks"
+        :clusterColors="clusterColors"
+      />
+    </div>
   </div>
 </template>
 
 <script>
-// import { ref } from 'vue';
 import StockSelect from '../components/StockSelect.vue';
 import TimeSelect from '../components/TimeSelect.vue';
-import QueryButton from '../components/QueryButton.vue';
 import PlaybackButton from '../components/PlaybackButton.vue';
 import StockChart from '../components/StockChart.vue';
 import axios from 'axios';
@@ -21,75 +75,339 @@ export default {
   components: {
     StockSelect,
     TimeSelect,
-    QueryButton,
     PlaybackButton,
     StockChart,
   },
   data() {
     return {
-      stocks: [],        // 从后端获取的股票代码列表
-      selectedStocks: [],// 用户选择的股票集合
-      timeStep: 0,       // 用户选择的时间步
-      coordinates: {},   // 获取的坐标数据
-      clusterInfo: {},   // 聚类信息
+      stocks: [],                  // 从后端获取的股票代码列表
+      selectedStocks: [],          // 用户选择的股票集合
+      clusterBaseTimeStep: 0,      // 聚类基础时间步
+      timeRange: { start: 0, end: 10 }, // 播放时间范围
+      currentTimeStep: 0,          // 当前显示的时间步
+      coordinates: {},             // 获取的坐标数据
+      clusterInfo: {},             // 聚类信息
+      clusterColors: {},           // 每个聚类的颜色映射
+      stockClusterMapping: {},     // 股票到聚类的映射（保持不变）
+      clustersGenerated: false,    // 是否已生成聚类
+      isPlaying: false,            // 是否正在播放
+      playbackInterval: null,      // 播放定时器
     };
   },
   methods: {
     async fetchStocks() {
       try {
+        console.log('开始获取股票列表...');
         const response = await axios.get('http://localhost:5050/api/stocks');
-        this.stocks = response.data.stock_codes; // 获取所有股票的代码
+        this.stocks = response.data.stock_codes || [];
+        console.log('获取到股票数量:', this.stocks.length);
       } catch (error) {
         console.error('无法获取股票列表:', error);
+        // 如果后端不可用，使用测试数据
+        this.stocks = ['sz000001', 'sz000002', 'sz000007', 'sz000021', 'sz000027'];
       }
     },
+    
     setSelectedStocks(selectedStocks) {
       this.selectedStocks = selectedStocks;
+      this.clustersGenerated = false; // 重新选择股票后需要重新生成聚类
+      console.log('选择的股票:', selectedStocks);
     },
-    setTimeStep(timeStep) {
-      this.timeStep = timeStep;
+    
+    setTimeRange(timeRange) {
+      this.timeRange = timeRange;
+      this.currentTimeStep = timeRange.start;
+      console.log('设置时间范围:', timeRange);
     },
-    async onQueryClicked() {
+    
+    onClusterBaseChange() {
+      this.clustersGenerated = false; // 聚类基础时间步改变后需要重新生成聚类
+    },
+    
+    async generateClusters() {
+      if (!this.selectedStocks.length) {
+        alert('请先选择股票！');
+        return;
+      }
+      
       try {
+        console.log('生成聚类，选择的股票:', this.selectedStocks, '时间步:', this.clusterBaseTimeStep);
+        
         const response = await axios.post('http://localhost:5050/api/coordinates/cluster', {
-          stock_codes: this.selectedStocks, // 发送整个选中的股票集合
-          time_step: this.timeStep
+          stock_codes: this.selectedStocks,
+          time_step: this.clusterBaseTimeStep
         });
-        this.coordinates = response.data.coordinates;
+        
+        console.log('聚类响应:', response.data);
+        
         this.clusterInfo = response.data.cluster_info;
-        console.log('Received coordinates:', this.coordinates);  // 打印查询结果
-        console.log('Received clusterInfo:', this.clusterInfo);
+        this.coordinates = response.data.coordinates;
+        
+        // 保存股票到聚类的映射关系
+        this.stockClusterMapping = {};
+        Object.keys(this.coordinates).forEach(stockCode => {
+          const coord = this.coordinates[stockCode];
+          if (coord && coord.cluster_id !== undefined) {
+            this.stockClusterMapping[stockCode] = coord.cluster_id;
+          }
+        });
+        
+        this.generateClusterColors();
+        this.clustersGenerated = true;
+        this.currentTimeStep = this.clusterBaseTimeStep;
+        
+        console.log('聚类生成完成:', this.clusterInfo);
+        console.log('股票聚类映射:', this.stockClusterMapping);
+        console.log('初始坐标:', this.coordinates);
       } catch (error) {
-        console.error('查询失败:', error);
+        console.error('生成聚类失败:', error);
+        alert('生成聚类失败: ' + error.message);
       }
     },
-    async onPlaybackClicked() {
-      let currentStep = this.timeStep;
-      const interval = setInterval(async () => {
-        try {
-          const response = await axios.post('http://localhost:5050/api/coordinates/cluster', {
-            stock_codes: this.selectedStocks, // 发送整个选中的股票集合
-            time_step: currentStep
-          });
-          this.coordinates = response.data.coordinates;
-          this.clusterInfo = response.data.cluster_info;
-          console.log('Playback - Received coordinates:', this.coordinates);
-          console.log('Playback - Received clusterInfo:', this.clusterInfo);
-          currentStep++;
-
-          // 如果达到最大时间步数，则停止播放
-          if (currentStep > 100) {
-            clearInterval(interval);
-          }
-        } catch (error) {
-          console.error('播放失败:', error);
-          clearInterval(interval);
+    
+    generateClusterColors() {
+      const clusterIds = new Set();
+      
+      // 从 coordinates 中提取聚类ID（后端应该在coordinates中包含cluster_id）
+      Object.values(this.coordinates).forEach(coord => {
+        if (coord && coord.cluster_id !== undefined) {
+          clusterIds.add(coord.cluster_id);
         }
-      }, 2000); // 每秒更新一次
+      });
+      
+      // 如果coordinates中没有cluster_id，检查clusterInfo结构
+      if (clusterIds.size === 0 && this.clusterInfo && this.clusterInfo.n_clusters) {
+        for (let i = 0; i < this.clusterInfo.n_clusters; i++) {
+          clusterIds.add(i);
+        }
+      }
+      
+      const colors = [
+        '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',
+        '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9',
+        '#F8C471', '#82E0AA', '#F1948A', '#85C1E9', '#D2B4DE'
+      ];
+      
+      let colorIndex = 0;
+      clusterIds.forEach(clusterId => {
+        this.clusterColors[clusterId] = colors[colorIndex % colors.length];
+        colorIndex++;
+      });
+      
+      console.log('找到的聚类ID:', Array.from(clusterIds));
+      console.log('生成的聚类颜色:', this.clusterColors);
+    },
+    
+    async fetchCoordinatesForTimeStep(timeStep) {
+      try {
+        // 添加请求超时，避免长时间等待
+        const response = await axios.post('http://localhost:5050/api/coordinates', {
+          stock_codes: this.selectedStocks,
+          time_step: timeStep
+        }, {
+          timeout: 3000 // 3秒超时
+        });
+        
+        // 获取新的坐标数据
+        const newCoordinates = response.data.coordinates;
+        
+        // 将保存的聚类信息应用到新坐标中
+        Object.keys(newCoordinates).forEach(stockCode => {
+          if (this.stockClusterMapping[stockCode] !== undefined) {
+            newCoordinates[stockCode].cluster_id = this.stockClusterMapping[stockCode];
+          }
+        });
+        
+        this.coordinates = newCoordinates;
+        console.log(`时间步 ${timeStep} 的坐标:`, this.coordinates);
+      } catch (error) {
+        console.error('获取坐标失败:', error);
+        // 如果请求失败，不阻塞播放，继续到下一个时间步
+      }
+    },
+    
+
+    
+    onPlaybackClicked() {
+      if (this.isPlaying) {
+        // 如果正在播放，则暂停（保持当前时间步）
+        this.pausePlayback();
+        return;
+      }
+      
+      if (!this.clustersGenerated) {
+        alert('请先生成聚类！');
+        return;
+      }
+      
+      // 开始或继续播放
+      this.startPlayback();
+    },
+    
+    startPlayback() {
+      // 立即设置播放状态，不等待API
+      this.isPlaying = true;
+      
+      // 如果当前时间步还没有设置或超出范围，从开始播放
+      if (this.currentTimeStep < this.timeRange.start || this.currentTimeStep > this.timeRange.end) {
+        this.currentTimeStep = this.timeRange.start;
+      }
+      
+      console.log('开始播放，时间范围:', this.timeRange, '当前时间步:', this.currentTimeStep);
+      console.log('使用的聚类映射:', this.stockClusterMapping);
+      
+      // 异步获取当前时间步数据，但不阻塞播放状态设置
+      this.fetchCoordinatesForTimeStep(this.currentTimeStep);
+      
+      this.playbackInterval = setInterval(() => {
+        this.currentTimeStep++;
+        
+        if (this.currentTimeStep > this.timeRange.end) {
+          this.stopPlayback();
+          return;
+        }
+        
+        // 异步获取数据，不阻塞定时器
+        this.fetchCoordinatesForTimeStep(this.currentTimeStep);
+        console.log(`播放时间步: ${this.currentTimeStep}`);
+      }, 1000); // 每秒更新一次
+    },
+    
+    pausePlayback() {
+      // 立即停止定时器
+      if (this.playbackInterval) {
+        clearInterval(this.playbackInterval);
+        this.playbackInterval = null;
+      }
+      this.isPlaying = false;
+      console.log(`播放已暂停在时间步: ${this.currentTimeStep}`);
+    },
+    
+    stopPlayback() {
+      // 立即停止定时器
+      if (this.playbackInterval) {
+        clearInterval(this.playbackInterval);
+        this.playbackInterval = null;
+      }
+      this.isPlaying = false;
+      
+      // 重置到时间范围的开始
+      this.currentTimeStep = this.timeRange.start;
+      
+      // 立即显示重置后的时间步
+      this.fetchCoordinatesForTimeStep(this.currentTimeStep);
+      
+      console.log('播放已停止，重置到时间步:', this.currentTimeStep);
     }
   },
   mounted() {
-    this.fetchStocks(); // 加载股票代码
+    console.log('HomeView组件已挂载');
+    this.fetchStocks();
   }
 };
 </script>
+
+<style scoped>
+.home-container {
+  display: flex;
+  height: 100vh;
+  gap: 20px;
+  padding: 20px;
+}
+
+.control-panel {
+  flex: 0 0 400px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.control-panel h2 {
+  margin: 0 0 20px 0;
+  color: #333;
+  text-align: center;
+}
+
+.status-info {
+  background: #e9ecef;
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  border-left: 4px solid #007bff;
+}
+
+.status-info p {
+  margin: 5px 0;
+  font-family: monospace;
+  font-size: 14px;
+}
+
+.control-section {
+  margin-bottom: 25px;
+  padding: 20px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.control-section h3 {
+  margin: 0 0 15px 0;
+  color: #495057;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.cluster-config {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cluster-config label {
+  font-weight: 500;
+  color: #6c757d;
+}
+
+.cluster-config input {
+  padding: 8px 12px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.cluster-config button {
+  padding: 10px 16px;
+  background: #007bff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.cluster-config button:hover:not(:disabled) {
+  background: #0056b3;
+}
+
+.cluster-config button:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
+}
+
+.control-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  align-items: center;
+}
+
+.chart-section {
+  flex: 1;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  overflow: hidden;
+}
+</style>

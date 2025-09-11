@@ -1,16 +1,22 @@
-# frontend
+# LOB_Analysis
 
-This template should help get you started developing with Vue 3 in Vite.
+## Backend Set up
 
-## Recommended IDE Setup
+### Configute DataBase
 
-[VSCode](https://code.visualstudio.com/) + [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
+Congfigure your database connection in `./backend/db.json`
 
-## Customize configuration
+### Create Tables
 
-See [Vite Configuration Reference](https://vite.dev/config/).
+Run `stock_list_loader.py` and `umap_data_loader.py` respectively to create basic table for the project.
 
-## Project Setup
+### Run backend app
+
+Run `app.py` file.
+
+## Frontend Set up
+
+### Frontend Setup
 
 ```sh
 npm install
@@ -19,11 +25,5 @@ npm install
 ### Compile and Hot-Reload for Development
 
 ```sh
-npm run dev
-```
-
-### Compile and Minify for Production
-
-```sh
-npm run build
+npm run serve
 ```

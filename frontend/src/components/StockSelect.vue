@@ -27,8 +27,8 @@
       >
         <input
           type="checkbox"
-          :value="stock"
-          v-model="selectedStocks"
+          :checked="selectedStocks.includes(stock)"
+          @change="toggleStock(stock)"
           @click.stop
         />
         <span class="stock-code">{{ stock }}</span>
@@ -73,18 +73,21 @@ export default {
       } else {
         this.selectedStocks.push(stock);
       }
+      // 确保立即触发更新事件
+      this.$emit('update-selected-stocks', [...this.selectedStocks]);
     },
     selectAll() {
       this.selectedStocks = [...this.filteredStocks];
+      this.$emit('update-selected-stocks', [...this.selectedStocks]);
     },
     clearAll() {
       this.selectedStocks = [];
+      this.$emit('update-selected-stocks', []);
     }
   },
   watch: {
-    selectedStocks(newSelection) {
-      this.$emit('update-selected-stocks', newSelection);
-    }
+    // 移除 watcher 中的 emit，避免与方法中的 emit 重复
+    // selectedStocks 的变化现在直接在方法中处理
   }
 };
 </script>

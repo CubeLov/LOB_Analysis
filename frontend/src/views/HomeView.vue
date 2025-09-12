@@ -110,7 +110,8 @@ export default {
     
     setSelectedStocks(selectedStocks) {
       this.selectedStocks = selectedStocks;
-      this.clustersGenerated = false; // 重新选择股票后需要重新生成聚类
+      // 清除历史聚类数据，因为股票选择改变了
+      this.clearClusterData();
       console.log('选择的股票:', selectedStocks);
     },
     
@@ -121,7 +122,8 @@ export default {
     },
     
     onClusterBaseChange() {
-      this.clustersGenerated = false; // 聚类基础时间步改变后需要重新生成聚类
+      // 清除历史聚类数据，因为聚类基础时间步改变了
+      this.clearClusterData();
     },
     
     async generateClusters() {
@@ -132,6 +134,9 @@ export default {
       
       try {
         console.log('生成聚类，选择的股票:', this.selectedStocks, '时间步:', this.clusterBaseTimeStep);
+        
+        // 清除历史聚类数据
+        this.clearClusterData();
         
         const response = await axios.post('http://localhost:5050/api/coordinates/cluster', {
           stock_codes: this.selectedStocks,
@@ -165,7 +170,26 @@ export default {
       }
     },
     
+    clearClusterData() {
+      // 停止当前播放
+      if (this.isPlaying) {
+        this.stopPlayback();
+      }
+      
+      // 清除所有历史聚类相关数据
+      this.coordinates = {};
+      this.clusterInfo = {};
+      this.clusterColors = {};
+      this.stockClusterMapping = {};
+      this.clustersGenerated = false;
+      this.currentTimeStep = 0;
+      
+      console.log('已清除历史聚类数据');
+    },
+    
     generateClusterColors() {
+      // 重新初始化颜色映射，确保没有历史数据
+      this.clusterColors = {};
       const clusterIds = new Set();
       
       // 从 coordinates 中提取聚类ID（后端应该在coordinates中包含cluster_id）
@@ -183,9 +207,9 @@ export default {
       }
       
       const colors = [
-        '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',
-        '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9',
-        '#F8C471', '#82E0AA', '#F1948A', '#85C1E9', '#D2B4DE'
+        '#E74C3C', '#2ECC71', '#3498DB', '#F39C12', '#9B59B6',
+        '#1ABC9C', '#E67E22', '#34495E', '#F1C40F', '#8E44AD',
+        '#16A085', '#E8524B', '#27AE60', '#2980B9', '#D35400'
       ];
       
       let colorIndex = 0;

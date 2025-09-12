@@ -51,6 +51,14 @@ export default {
     clusterColors: {
       type: Object,
       default: () => ({})
+    },
+    stockNames: {
+      type: Object,
+      default: () => ({})
+    },
+    formatStockCode: {
+      type: Function,
+      required: true
     }
   },
   setup(props) {
@@ -100,15 +108,25 @@ export default {
             clusterGroups[clusterId] = {
               x: [],
               y: [],
-              text: [],
-              stockCodes: []
+              text: [],           // 图表上显示的文本（股票名字）
+              stockNames: [],     // 悬停时显示的股票名字
+              stockCodes: [],     // 悬停时显示的股票代码
+              originalCodes: []   // 原始股票代码（用于内部处理）
             };
           }
 
           clusterGroups[clusterId].x.push(coord.umap1);
           clusterGroups[clusterId].y.push(coord.umap2);
-          clusterGroups[clusterId].text.push(stockCode);
-          clusterGroups[clusterId].stockCodes.push(stockCode);
+          
+          const stockName = props.stockNames[stockCode] || stockCode;
+          const formattedCode = props.formatStockCode(stockCode);
+          
+          // 图表上显示股票名字
+          clusterGroups[clusterId].text.push(stockName);
+          // 悬停时分别存储股票名字和代码
+          clusterGroups[clusterId].stockNames.push(stockName);
+          clusterGroups[clusterId].stockCodes.push(formattedCode);
+          clusterGroups[clusterId].originalCodes.push(stockCode);
         });
 
         // 创建Plotly数据
@@ -122,7 +140,8 @@ export default {
             mode: 'markers+text',
             type: 'scatter',
             name: clusterId === '-1' ? '未分类' : `聚类 ${clusterId}`,
-            text: group.text,
+            text: group.text,        // 图表上显示的文本（只有股票名字）
+            customdata: group.stockNames.map((name, index) => [name, group.stockCodes[index]]), // 传递股票名字和代码
             textposition: 'top center',
             textfont: {
               size: 10,
@@ -138,7 +157,8 @@ export default {
               opacity: 0.8
             },
             hovertemplate: 
-              '<b>%{text}</b><br>' +
+              '<b>%{customdata[0]}</b><br>' +
+              '股票代码: %{customdata[1]}<br>' +
               'UMAP1: %{x:.2f}<br>' +
               'UMAP2: %{y:.2f}<br>' +
               '聚类: ' + (clusterId === '-1' ? '未分类' : clusterId) +
@@ -225,7 +245,7 @@ export default {
 
     // 监听数据变化
     watch(
-      () => [props.coordinates, props.clusterInfo, props.clusterColors, props.currentTimeStep],
+      () => [props.coordinates, props.clusterInfo, props.clusterColors, props.currentTimeStep, props.stockNames, props.formatStockCode],
       (newValues, oldValues) => {
         // 安全地解构新值
         const [newCoords, newClusterInfo, newClusterColors] = newValues || [{}, {}, {}];

@@ -31,7 +31,7 @@
           @change="toggleStock(stock)"
           @click.stop
         />
-        <span class="stock-code">{{ stock }}</span>
+        <span class="stock-code">{{ stockNames[stock] || stock }}({{ formatStockCode(stock) }})</span>
       </div>
       
       <div v-if="filteredStocks.length === 0" class="no-results">
@@ -47,6 +47,14 @@ export default {
     stocks: {
       type: Array,
       default: () => []
+    },
+    stockNames: {
+      type: Object,
+      default: () => ({})
+    },
+    formatStockCode: {
+      type: Function,
+      required: true
     }
   },
   data() {
@@ -60,9 +68,12 @@ export default {
       if (!this.searchQuery) {
         return this.stocks;
       }
-      return this.stocks.filter(stock => 
-        stock.toLowerCase().includes(this.searchQuery.toLowerCase())
-      );
+      return this.stocks.filter(stock => {
+        const stockName = this.stockNames[stock] || stock;
+        const formattedCode = this.formatStockCode(stock);
+        const displayText = `${stockName}(${formattedCode})`;
+        return displayText.toLowerCase().includes(this.searchQuery.toLowerCase());
+      });
     }
   },
   methods: {

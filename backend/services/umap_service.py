@@ -75,16 +75,17 @@ class UMAPCoordinateService:
                 sql = """
                 SELECT 
                     COUNT(*) as total_time_steps,
-                    MIN(timestep) as min_timestep,
-                    MAX(timestep) as max_timestep,
-                    MIN(umap1) as min_umap1,
-                    MAX(umap1) as max_umap1,
-                    AVG(umap1) as avg_umap1,
-                    MIN(umap2) as min_umap2,
-                    MAX(umap2) as max_umap2,
-                    AVG(umap2) as avg_umap2
-                FROM umap_coordinates 
-                WHERE stock_id = %s
+                    MIN(u.timestep) as min_timestep,
+                    MAX(u.timestep) as max_timestep,
+                    MIN(u.umap1) as min_umap1,
+                    MAX(u.umap1) as max_umap1,
+                    AVG(u.umap1) as avg_umap1,
+                    MIN(u.umap2) as min_umap2,
+                    MAX(u.umap2) as max_umap2,
+                    AVG(u.umap2) as avg_umap2,
+                    MAX(s.a_stock_name) as stock_name
+                FROM umap_coordinates u JOIN stock_list s ON u.stock_id = s.a_stock_code
+                WHERE u.stock_id = %s
                 """
                 
                 cursor.execute(sql, (stock_code,))
@@ -93,6 +94,7 @@ class UMAPCoordinateService:
                 if result and result['total_time_steps'] > 0:
                     return {
                         "stock_code": stock_code,
+                        "stock_name": result['stock_name'],
                         "total_time_steps": int(result['total_time_steps']),
                         "time_step_range": {
                             "min": int(result['min_timestep']),

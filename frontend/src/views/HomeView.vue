@@ -12,7 +12,7 @@
 
       <div class="control-section">
         <h3>1. 股票选择</h3>
-        <StockSelect :stocks="stocks" @update-selected-stocks="setSelectedStocks" />
+        <StockSelect :stocks="stocks" :stock-names="stockNames" :format-stock-code="formatStockCode" @update-selected-stocks="setSelectedStocks" />
       </div>
       
       <div class="control-section">
@@ -59,6 +59,8 @@
         :currentTimeStep="currentTimeStep"
         :selectedStocks="selectedStocks"
         :clusterColors="clusterColors"
+        :stockNames="stockNames"
+        :formatStockCode="formatStockCode"
       />
     </div>
   </div>
@@ -81,6 +83,7 @@ export default {
   data() {
     return {
       stocks: [],                  // 从后端获取的股票代码列表
+      stockNames: {},              // 股票代码到股票名字的映射
       selectedStocks: [],          // 用户选择的股票集合
       clusterBaseTimeStep: 0,      // 聚类基础时间步
       timeRange: { start: 0, end: 10 }, // 播放时间范围
@@ -95,16 +98,66 @@ export default {
     };
   },
   methods: {
+    // 工具函数：格式化股票代码为6位数字
+    formatStockCode(stockCode) {
+      // 提取数字部分
+      const match = stockCode.match(/(\d+)/);
+      if (match) {
+        const number = match[1];
+        // 补齐为6位
+        const paddedNumber = number.padStart(6, '0');
+        // 保持原有的前缀（如 sz, sh）
+        return stockCode.replace(/\d+/, paddedNumber);
+      }
+      return stockCode; // 如果没有匹配到数字，返回原始代码
+    },
     async fetchStocks() {
       try {
         console.log('开始获取股票列表...');
         const response = await axios.get('http://localhost:5050/api/stocks');
-        this.stocks = response.data.stock_codes || [];
+        const stockCodes = response.data.stock_codes || [];
+        this.stocks = stockCodes;
+        
+        // 获取每个股票的详细信息（包括股票名字）
+        console.log('开始获取股票名字信息...');
+        const stockNamePromises = stockCodes.map(async (stockCode) => {
+          try {
+            const infoResponse = await axios.get(`http://localhost:5050/api/stock/${stockCode}/info`);
+            return {
+              code: stockCode,
+              name: infoResponse.data.stock_name || stockCode
+            };
+          } catch (error) {
+            console.warn(`获取股票${stockCode}信息失败:`, error.message);
+            return {
+              code: stockCode,
+              name: stockCode // 如果获取失败，使用代码作为名字
+            };
+          }
+        });
+        
+        const stockInfos = await Promise.all(stockNamePromises);
+        
+        // 构建股票名字映射
+        this.stockNames = {};
+        stockInfos.forEach(info => {
+          this.stockNames[info.code] = info.name;
+        });
+        
         console.log('获取到股票数量:', this.stocks.length);
+        console.log('股票名字映射:', this.stockNames);
       } catch (error) {
         console.error('无法获取股票列表:', error);
         // 如果后端不可用，使用测试数据
         this.stocks = ['sz000001', 'sz000002', 'sz000007', 'sz000021', 'sz000027'];
+        // 为测试数据设置默认名字
+        this.stockNames = {
+          'sz000001': '平安银行',
+          'sz000002': '万科A',
+          'sz000007': '全新好',
+          'sz000021': '深科技',
+          'sz000027': '深圳能源'
+        };
       }
     },
     

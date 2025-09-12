@@ -208,11 +208,11 @@ export default {
             layout: layout
           }, {
             transition: {
-              duration: 800,
+              duration: 400,
               easing: 'cubic-in-out'
             },
             frame: {
-              duration: 800,
+              duration: 400,
               redraw: true
             }
           });

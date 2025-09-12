@@ -154,7 +154,7 @@ export default {
         
         this.generateClusterColors();
         this.clustersGenerated = true;
-        this.currentTimeStep = this.clusterBaseTimeStep;
+        // this.currentTimeStep = this.clusterBaseTimeStep;
         
         console.log('聚类生成完成:', this.clusterInfo);
         console.log('股票聚类映射:', this.stockClusterMapping);
@@ -205,7 +205,7 @@ export default {
           stock_codes: this.selectedStocks,
           time_step: timeStep
         }, {
-          timeout: 3000 // 3秒超时
+          timeout: 1000 // 1秒超时
         });
         
         // 获取新的坐标数据

@@ -26,12 +26,17 @@
     
     <div class="time-info">
       <p>播放范围: {{ startTime }} - {{ endTime }} ({{ endTime - startTime + 1 }} 步)</p>
+      <div v-if="startRealTime && endRealTime" class="real-time-range">
+        <p>实际时间: {{ startRealTime }} 至 {{ endRealTime }}</p>
+      </div>
       <p v-if="clusterBase !== undefined">聚类基础: {{ clusterBase }}</p>
     </div>
   </div>
 </template>
   
 <script>
+import { timeConverter } from '../utils/timeConverter.js';
+
 export default {
   props: {
     clusterBase: {
@@ -43,6 +48,8 @@ export default {
     return {
       startTime: 0,
       endTime: 10,
+      startRealTime: '',
+      endRealTime: ''
     };
   },
   methods: {
@@ -52,10 +59,29 @@ export default {
         this.endTime = this.startTime;
       }
       
+      // 更新真实时间显示
+      this.updateRealTimes();
+      
       this.$emit('update-time-range', {
         start: parseInt(this.startTime),
         end: parseInt(this.endTime)
       });
+    },
+
+    // 更新真实时间显示
+    async updateRealTimes() {
+      try {
+        const [startReal, endReal] = await Promise.all([
+          timeConverter.convertTimeStep(this.startTime),
+          timeConverter.convertTimeStep(this.endTime)
+        ]);
+        this.startRealTime = startReal;
+        this.endRealTime = endReal;
+      } catch (error) {
+        console.error('更新时间范围真实时间失败:', error);
+        this.startRealTime = '';
+        this.endRealTime = '';
+      }
     }
   },
   watch: {
@@ -113,6 +139,20 @@ export default {
 
 .time-info p:last-child {
   margin-bottom: 0;
+}
+
+.real-time-range {
+  background: #e8f5e8;
+  padding: 8px;
+  border-radius: 4px;
+  margin: 5px 0;
+  border-left: 3px solid #28a745;
+}
+
+.real-time-range p {
+  font-size: 11px;
+  color: #155724;
+  font-family: monospace;
 }
 </style>
   

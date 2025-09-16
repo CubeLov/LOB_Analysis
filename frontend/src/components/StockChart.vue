@@ -3,7 +3,8 @@
     <div class="chart-header">
       <h3>股票聚类可视化</h3>
       <div class="chart-info">
-        <span v-if="currentTimeStep !== undefined">当前时间步: {{ currentTimeStep }}</span>
+        <span v-if="currentRealTime">当前时间: {{ currentRealTime }}</span>
+        <span v-else-if="currentTimeStep !== undefined">时间步: {{ currentTimeStep }}</span>
         <span v-if="selectedStocks.length">显示股票: {{ selectedStocks.length }}只</span>
       </div>
     </div>
@@ -59,6 +60,10 @@ export default {
     formatStockCode: {
       type: Function,
       required: true
+    },
+    currentRealTime: {
+      type: String,
+      default: ''
     }
   },
   setup(props) {
@@ -168,7 +173,9 @@ export default {
 
         const layout = {
           title: {
-            text: `股票聚类分布 (时间步: ${props.currentTimeStep ?? '未知'})`,
+            text: props.currentRealTime ? 
+              `股票聚类分布 (${props.currentRealTime})` : 
+              `股票聚类分布 (时间步: ${props.currentTimeStep ?? '未知'})`,
             font: { size: 16 }
           },
           xaxis: { 
@@ -228,11 +235,11 @@ export default {
             layout: layout
           }, {
             transition: {
-              duration: 400,
+              duration: 250,
               easing: 'cubic-in-out'
             },
             frame: {
-              duration: 400,
+              duration: 250,
               redraw: true
             }
           });
@@ -245,7 +252,7 @@ export default {
 
     // 监听数据变化
     watch(
-      () => [props.coordinates, props.clusterInfo, props.clusterColors, props.currentTimeStep, props.stockNames, props.formatStockCode],
+      () => [props.coordinates, props.clusterInfo, props.clusterColors, props.currentTimeStep, props.stockNames, props.formatStockCode, props.currentRealTime],
       (newValues, oldValues) => {
         // 安全地解构新值
         const [newCoords, newClusterInfo, newClusterColors] = newValues || [{}, {}, {}];

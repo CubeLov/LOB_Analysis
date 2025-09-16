@@ -7,7 +7,7 @@
         <p>股票总数: {{ stocks.length }}</p>
         <p>已选择: {{ selectedStocks.length }}</p>
         <p>聚类状态: {{ clustersGenerated ? '已生成' : '未生成' }}</p>
-        <p>当前时间步: {{ currentTimeStep }}</p>
+        <p>当前时间: {{ currentRealTime || `时间步 ${currentTimeStep}` }}</p>
       </div>
 
       <div class="control-section">
@@ -18,7 +18,7 @@
       <div class="control-section">
         <h3>2. 聚类配置</h3>
         <div class="cluster-config">
-          <label for="cluster-timestep">聚类基础时间步：</label>
+          <label for="cluster-timestep">聚类基础时间：</label>
           <input 
             type="number" 
             id="cluster-timestep" 
@@ -27,6 +27,9 @@
             max="1000"
             @change="onClusterBaseChange"
           />
+          <div v-if="clusterBaseRealTime" class="real-time-display">
+            {{ clusterBaseRealTime }}
+          </div>
           <button @click="generateClusters" :disabled="!selectedStocks.length">生成聚类</button>
         </div>
       </div>
@@ -66,10 +69,11 @@
     </div>
 
     <div class="chart-section">
-      <StockChart 
+            <StockChart 
         :coordinates="coordinates" 
         :clusterInfo="clusterInfo" 
         :currentTimeStep="currentTimeStep"
+        :currentRealTime="currentRealTime"
         :selectedStocks="selectedStocks"
         :clusterColors="clusterColors"
         :stockNames="stockNames"
@@ -85,6 +89,7 @@ import TimeSelect from '../components/TimeSelect.vue';
 import PlaybackButton from '../components/PlaybackButton.vue';
 import StockChart from '../components/StockChart.vue';
 import axios from 'axios';
+import { timeConverter } from '../utils/timeConverter.js';
 
 export default {
   components: {
@@ -109,6 +114,8 @@ export default {
       isPlaying: false,            // 是否正在播放
       playbackInterval: null,      // 播放定时器
       skipPrePostMarket: false,    // 是否跳过盘前盘后时间
+      currentRealTime: '',         // 当前真实时间
+      clusterBaseRealTime: '',     // 聚类基础真实时间
     };
   },
   methods: {
@@ -185,12 +192,16 @@ export default {
     setTimeRange(timeRange) {
       this.timeRange = timeRange;
       this.currentTimeStep = timeRange.start;
+      // 更新当前真实时间
+      this.updateCurrentRealTime();
       console.log('设置时间范围:', timeRange);
     },
     
     onClusterBaseChange() {
       // 清除历史聚类数据，因为聚类基础时间步改变了
       this.clearClusterData();
+      // 更新聚类基础真实时间
+      this.updateClusterBaseRealTime();
     },
     
     onSkipOptionChange() {
@@ -286,6 +297,7 @@ export default {
       this.stockClusterMapping = {};
       this.clustersGenerated = false;
       this.currentTimeStep = 0;
+      this.currentRealTime = '';
       
       console.log('已清除历史聚类数据');
     },
@@ -378,11 +390,13 @@ export default {
       // 如果当前时间步还没有设置或超出范围，从开始播放
       if (this.currentTimeStep < this.timeRange.start || this.currentTimeStep > this.timeRange.end) {
         this.currentTimeStep = this.timeRange.start;
+        this.updateCurrentRealTime(); // 更新真实时间
       }
       
       // 如果启用跳过功能且起始时间步是盘前盘后时间，跳转到下一个有效时间步
       if (this.skipPrePostMarket && this.isPrePostMarketTime(this.currentTimeStep)) {
         this.currentTimeStep = this.getNextValidTimeStep(this.currentTimeStep - 1);
+        this.updateCurrentRealTime(); // 更新真实时间
       }
       
       console.log('开始播放，时间范围:', this.timeRange, '当前时间步:', this.currentTimeStep);
@@ -402,6 +416,7 @@ export default {
         }
         
         this.currentTimeStep = nextTimeStep;
+        this.updateCurrentRealTime(); // 更新真实时间
         
         // 异步获取数据，不阻塞定时器
         this.fetchCoordinatesForTimeStep(this.currentTimeStep);
@@ -431,16 +446,40 @@ export default {
       
       // 重置到时间范围的开始
       this.currentTimeStep = this.timeRange.start;
+      this.updateCurrentRealTime(); // 更新真实时间
       
       // 立即显示重置后的时间步
       this.fetchCoordinatesForTimeStep(this.currentTimeStep);
       
       console.log('播放已停止，重置到时间步:', this.currentTimeStep);
+    },
+
+    // 更新当前真实时间
+    async updateCurrentRealTime() {
+      try {
+        this.currentRealTime = await timeConverter.convertTimeStep(this.currentTimeStep);
+      } catch (error) {
+        console.error('更新当前真实时间失败:', error);
+        this.currentRealTime = '';
+      }
+    },
+
+    // 更新聚类基础真实时间
+    async updateClusterBaseRealTime() {
+      try {
+        this.clusterBaseRealTime = await timeConverter.convertTimeStep(this.clusterBaseTimeStep);
+      } catch (error) {
+        console.error('更新聚类基础真实时间失败:', error);
+        this.clusterBaseRealTime = '';
+      }
     }
   },
   mounted() {
     console.log('HomeView组件已挂载');
     this.fetchStocks();
+    // 初始化时间显示
+    this.updateCurrentRealTime();
+    this.updateClusterBaseRealTime();
   }
 };
 </script>
@@ -532,6 +571,28 @@ export default {
 .cluster-config button:disabled {
   background: #6c757d;
   cursor: not-allowed;
+}
+
+.real-time-display {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: #e3f2fd;
+  border: 1px solid #bbdefb;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #1565c0;
+  font-family: monospace;
+}
+
+.real-time-display {
+  font-size: 12px;
+  color: #28a745;
+  background: #f8f9fa;
+  padding: 6px 10px;
+  border-radius: 4px;
+  border-left: 3px solid #28a745;
+  margin: 5px 0;
+  font-family: monospace;
 }
 
 .playback-options {

@@ -4,7 +4,6 @@ TIME查询服务类
 
 import logging
 from datetime import datetime, timedelta
-import pandas as pd
 import holidays
 
 logger = logging.getLogger(__name__)
@@ -13,12 +12,37 @@ class TimeService:
     """时间查询服务类"""
     
     def __init__(self):
-        """初始化时间服务，设置中国节假日"""
-        self.china_holidays = holidays.country_holidays('CN',years=range(2019, 2025))
-
-    def _is_trading_day(self, date: datetime) -> bool:
+        """初始化时间服务，设置中国节假日并预计算交易日"""
+        self.china_holidays = holidays.country_holidays('CN',years=range(2019, 2021))
+        
+        # 预计算交易日列表以提升性能
+        self._precompute_trading_days()
+        
+        # 结果缓存，存储最近查询的结果
+        self._result_cache = {}
+    
+    def _precompute_trading_days(self):
+        """预计算所有交易日以提升性能"""
+        logger.info("开始预计算交易日...")
+        
+        # 基准日期（2019年1月2日是周三，交易日）
+        base_date = datetime(2019, 1, 2)
+        # 计算到2026年底，确保有足够的交易日
+        end_date = datetime(2020, 12, 31)
+        
+        self.trading_days = []
+        current_date = base_date
+        
+        while current_date <= end_date:
+            if self._is_trading_day_raw(current_date):
+                self.trading_days.append(current_date)
+            current_date += timedelta(days=1)
+        
+        logger.info(f"预计算完成，共找到 {len(self.trading_days)} 个交易日")
+    
+    def _is_trading_day_raw(self, date: datetime) -> bool:
         """
-        判断是否为交易日（排除周末和节假日）
+        原始的交易日判断方法（不使用缓存的交易日列表）
         
         Args:
             date: 要检查的日期
@@ -36,24 +60,10 @@ class TimeService:
             
         return True
     
-    def _get_next_trading_day(self, date: datetime) -> datetime:
-        """
-        获取下一个交易日
-        
-        Args:
-            date: 当前日期
-            
-        Returns:
-            datetime: 下一个交易日
-        """
-        next_date = date + timedelta(days=1)
-        while not self._is_trading_day(next_date):
-            next_date += timedelta(days=1)
-        return next_date
-    
     def get_accurate_time(self, time_step: int) -> str:
         """
         根据时间步长计算具体时间（跳过周末和节假日）
+        使用预计算的交易日列表，大幅提升性能
         
         交易时间安排：
         - 每天第一个时间步(0, 49, 98, ...）表示盘前 09:15:00
@@ -70,6 +80,10 @@ class TimeService:
             具体时间字符串，格式为"YYYY-MM-DD HH:MM"
         """
         
+        # 检查缓存
+        if time_step in self._result_cache:
+            return self._result_cache[time_step]
+        
         # 每天总共50个时间步：1个盘前 + 24个上午 + 24个下午 + 1个盘后
         steps_per_day = 50
         
@@ -77,39 +91,11 @@ class TimeService:
         trading_days_needed = time_step // steps_per_day
         step_in_day = time_step % steps_per_day
         
-        # 基准日期（2019年1月2日是周三，交易日）
-        base_date = datetime(2019, 1, 2)
+        # 直接从预计算的交易日列表中获取目标日期
+        if trading_days_needed >= len(self.trading_days):
+            raise ValueError(f"时间步长 {time_step} 超出了预计算范围，最大支持 {len(self.trading_days) * steps_per_day - 1}")
         
-        # 使用pandas生成日期范围，然后过滤出交易日
-        if trading_days_needed == 0:
-            current_date = base_date
-        else:
-            # 生成足够多的日期，考虑到节假日的影响，生成更多的日期以确保有足够的交易日
-            # 估算需要的总日历日数（考虑周末约占28.6%，节假日约占3-4%）
-            estimated_calendar_days = int(trading_days_needed * 1.4)  # 预留40%的缓冲
-            
-            # 生成日期范围
-            date_range = pd.date_range(
-                start=base_date,
-                periods=estimated_calendar_days + 1,
-                freq='D'
-            )
-            
-            # 过滤出交易日
-            trading_days = []
-            for date in date_range:
-                if self._is_trading_day(date):
-                    trading_days.append(date)
-                    if len(trading_days) > trading_days_needed:
-                        break
-            
-            # 如果没有足够的交易日，继续向前寻找
-            while len(trading_days) <= trading_days_needed:
-                last_date = trading_days[-1] if trading_days else base_date
-                next_trading_day = self._get_next_trading_day(last_date)
-                trading_days.append(next_trading_day)
-            
-            current_date = trading_days[trading_days_needed].to_pydatetime()
+        current_date = self.trading_days[trading_days_needed]
         
         # 根据当天内的步数计算具体时间
         if step_in_day == 0:
@@ -127,4 +113,23 @@ class TimeService:
             # 盘后时间
             result_time = current_date.replace(hour=15, minute=0, second=0)
         
-        return result_time.strftime("%Y-%m-%d %H:%M")
+        result_str = result_time.strftime("%Y-%m-%d %H:%M")
+        
+        # 缓存结果（限制缓存大小，防止内存泄漏）
+        if len(self._result_cache) < 10000:  # 最多缓存10000个结果
+            self._result_cache[time_step] = result_str
+        
+        return result_str
+    
+    def clear_cache(self):
+        """清理缓存"""
+        self._result_cache.clear()
+        logger.info("时间查询缓存已清理")
+    
+    def get_cache_stats(self):
+        """获取缓存统计信息"""
+        return {
+            "cache_size": len(self._result_cache),
+            "trading_days_count": len(self.trading_days),
+            "max_supported_time_step": len(self.trading_days) * 50 - 1
+        }

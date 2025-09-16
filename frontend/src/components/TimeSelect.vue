@@ -7,7 +7,7 @@
         id="start-time" 
         v-model="startTime" 
         min="0" 
-        max="100"
+        max="1000"
         @change="updateTimeRange"
       />
     </div>
@@ -19,7 +19,7 @@
         id="end-time" 
         v-model="endTime" 
         :min="startTime" 
-        max="100"
+        max="1000"
         @change="updateTimeRange"
       />
     </div>

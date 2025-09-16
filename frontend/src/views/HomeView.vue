@@ -24,7 +24,7 @@
             id="cluster-timestep" 
             v-model="clusterBaseTimeStep" 
             min="0" 
-            max="100"
+            max="1000"
             @change="onClusterBaseChange"
           />
           <button @click="generateClusters" :disabled="!selectedStocks.length">生成聚类</button>
@@ -41,6 +41,19 @@
 
       <div class="control-section">
         <h3>4. 播放控制</h3>
+        <div class="playback-options">
+          <div class="skip-option">
+            <label class="checkbox-container">
+              <input 
+                type="checkbox" 
+                v-model="skipPrePostMarket"
+                @change="onSkipOptionChange"
+              />
+              <span class="checkmark"></span>
+              跳过盘前盘后时间
+            </label>
+          </div>
+        </div>
         <div class="control-buttons">
           <PlaybackButton 
             @playback-clicked="onPlaybackClicked" 
@@ -95,6 +108,7 @@ export default {
       clustersGenerated: false,    // 是否已生成聚类
       isPlaying: false,            // 是否正在播放
       playbackInterval: null,      // 播放定时器
+      skipPrePostMarket: false,    // 是否跳过盘前盘后时间
     };
   },
   methods: {
@@ -177,6 +191,42 @@ export default {
     onClusterBaseChange() {
       // 清除历史聚类数据，因为聚类基础时间步改变了
       this.clearClusterData();
+    },
+    
+    onSkipOptionChange() {
+      console.log('跳过盘前盘后时间选项改变:', this.skipPrePostMarket);
+    },
+    
+    // 判断某个时间步是否为盘前盘后时间
+    // k*50 (k=0,1,2,...) 和 r*50-1 (r=1,2,3,...)
+    isPrePostMarketTime(timeStep) {
+      // k*50 (k=0,1,2,...)：0, 50, 100, 150, ...
+      if (timeStep % 50 === 0) {
+        return true;
+      }
+      
+      // r*50-1 (r=1,2,3,...)：49, 99, 149, 199, ...
+      if ((timeStep + 1) % 50 === 0 && timeStep > 0) {
+        return true;
+      }
+      
+      return false;
+    },
+    
+    // 获取下一个有效的时间步（如果启用跳过功能）
+    getNextValidTimeStep(currentStep) {
+      if (!this.skipPrePostMarket) {
+        return currentStep + 1;
+      }
+      
+      let nextStep = currentStep + 1;
+      
+      // 如果下一个时间步是盘前盘后时间，继续寻找下一个有效时间步
+      while (nextStep <= this.timeRange.end && this.isPrePostMarketTime(nextStep)) {
+        nextStep++;
+      }
+      
+      return nextStep;
     },
     
     async generateClusters() {
@@ -330,23 +380,34 @@ export default {
         this.currentTimeStep = this.timeRange.start;
       }
       
+      // 如果启用跳过功能且起始时间步是盘前盘后时间，跳转到下一个有效时间步
+      if (this.skipPrePostMarket && this.isPrePostMarketTime(this.currentTimeStep)) {
+        this.currentTimeStep = this.getNextValidTimeStep(this.currentTimeStep - 1);
+      }
+      
       console.log('开始播放，时间范围:', this.timeRange, '当前时间步:', this.currentTimeStep);
+      console.log('跳过盘前盘后:', this.skipPrePostMarket);
       console.log('使用的聚类映射:', this.stockClusterMapping);
       
       // 异步获取当前时间步数据，但不阻塞播放状态设置
       this.fetchCoordinatesForTimeStep(this.currentTimeStep);
       
       this.playbackInterval = setInterval(() => {
-        this.currentTimeStep++;
+        // 使用新的方法获取下一个有效时间步
+        const nextTimeStep = this.getNextValidTimeStep(this.currentTimeStep);
         
-        if (this.currentTimeStep > this.timeRange.end) {
+        if (nextTimeStep > this.timeRange.end) {
           this.stopPlayback();
           return;
         }
         
+        this.currentTimeStep = nextTimeStep;
+        
         // 异步获取数据，不阻塞定时器
         this.fetchCoordinatesForTimeStep(this.currentTimeStep);
-        console.log(`播放时间步: ${this.currentTimeStep}`);
+        
+        const skipInfo = this.skipPrePostMarket ? ' (已启用跳过盘前盘后)' : '';
+        console.log(`播放时间步: ${this.currentTimeStep}${skipInfo}`);
       }, 1000); // 每秒更新一次
     },
     
@@ -471,6 +532,39 @@ export default {
 .cluster-config button:disabled {
   background: #6c757d;
   cursor: not-allowed;
+}
+
+.playback-options {
+  margin-bottom: 20px;
+}
+
+.skip-option {
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border: 1px solid #e9ecef;
+}
+
+.checkbox-container {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 500;
+  color: #495057;
+  user-select: none;
+}
+
+.checkbox-container input[type="checkbox"] {
+  margin-right: 10px;
+  transform: scale(1.2);
+  cursor: pointer;
+}
+
+.option-description {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #6c757d;
+  font-style: italic;
 }
 
 .control-buttons {

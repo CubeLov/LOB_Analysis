@@ -10,6 +10,9 @@ logger = logging.getLogger(__name__)
 
 time_bp = Blueprint('time', __name__, url_prefix='/api')
 
+# 创建时间服务实例
+time_service = TimeService()
+
 @time_bp.route('/times', methods=['POST'])
 def get_time():
     """
@@ -49,7 +52,7 @@ def get_time():
                 "message": "time_step不能为负数"
             }), 400
 
-        accurate_time = TimeService.get_accurate_time(time_step)
+        accurate_time = time_service.get_accurate_time(time_step)
 
         return jsonify({
             "accurate_time": accurate_time

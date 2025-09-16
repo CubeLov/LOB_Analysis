@@ -14,8 +14,8 @@ class TimeService:
     
     def __init__(self):
         """初始化时间服务，设置中国节假日"""
-        self.china_holidays = holidays.country_holidays('CN')
-    
+        self.china_holidays = holidays.country_holidays('CN',years=range(2019, 2025))
+
     def _is_trading_day(self, date: datetime) -> bool:
         """
         判断是否为交易日（排除周末和节假日）

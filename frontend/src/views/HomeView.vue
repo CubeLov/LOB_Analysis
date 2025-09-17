@@ -18,18 +18,71 @@
       <div class="control-section">
         <h3>2. 聚类配置</h3>
         <div class="cluster-config">
-          <label for="cluster-timestep">聚类基础时间：</label>
-          <input 
-            type="number" 
-            id="cluster-timestep" 
-            v-model="clusterBaseTimeStep" 
-            min="0" 
-            max="1000"
-            @change="onClusterBaseChange"
-          />
-          <div v-if="clusterBaseRealTime" class="real-time-display">
-            {{ clusterBaseRealTime }}
+          <div class="cluster-time-mode">
+            <label class="checkbox-container">
+              <input 
+                type="checkbox" 
+                v-model="useRealTimeForCluster"
+                @change="onClusterModeChange"
+              />
+              <span class="checkmark"></span>
+              使用真实时间选择
+            </label>
           </div>
+
+          <!-- 时间步选择模式 -->
+          <div v-if="!useRealTimeForCluster" class="timestep-cluster-mode">
+            <label for="cluster-timestep">聚类基础时间步：</label>
+            <input 
+              type="number" 
+              id="cluster-timestep" 
+              v-model="clusterBaseTimeStep" 
+              min="0" 
+              max="1000"
+              @change="onClusterBaseChange"
+            />
+          </div>
+
+          <!-- 真实时间选择模式 -->
+          <div v-if="useRealTimeForCluster" class="realtime-cluster-mode">
+            <div class="cluster-time-input-group">
+              <label for="cluster-real-date">聚类基础日期：</label>
+              <input 
+                type="date" 
+                id="cluster-real-date" 
+                v-model="clusterRealDate" 
+                min="2019-01-02"
+                max="2020-12-31"
+                @change="updateClusterTimeFromReal"
+              />
+            </div>
+
+            <div class="cluster-time-input-group">
+              <label for="cluster-real-time">聚类基础时间：</label>
+              <input 
+                type="time" 
+                id="cluster-real-time" 
+                v-model="clusterRealTime" 
+                min="09:10"
+                max="15:05"
+                step="60"
+                @change="updateClusterTimeFromReal"
+              />
+            </div>
+
+            <div class="cluster-time-tips">
+              <p>提示：选择交易时间作为聚类基础，系统会自动调整到最近的5分钟时间点</p>
+            </div>
+          </div>
+          
+          <div v-if="clusterBaseRealTime" class="real-time-display">
+            实际使用时间: {{ clusterBaseRealTime }}
+          </div>
+
+          <div v-if="clusterErrorMessage" class="cluster-error-message">
+            <p>{{ clusterErrorMessage }}</p>
+          </div>
+
           <button @click="generateClusters" :disabled="!selectedStocks.length">生成聚类</button>
         </div>
       </div>
@@ -116,6 +169,10 @@ export default {
       skipPrePostMarket: false,    // 是否跳过盘前盘后时间
       currentRealTime: '',         // 当前真实时间
       clusterBaseRealTime: '',     // 聚类基础真实时间
+      useRealTimeForCluster: false, // 是否使用真实时间选择聚类基础时间
+      clusterRealDate: '2019-01-02', // 聚类基础日期
+      clusterRealTime: '09:30',    // 聚类基础时间
+      clusterErrorMessage: ''      // 聚类时间转换错误信息
     };
   },
   methods: {
@@ -191,9 +248,14 @@ export default {
     
     setTimeRange(timeRange) {
       this.timeRange = timeRange;
-      this.currentTimeStep = timeRange.start;
-      // 更新当前真实时间
-      this.updateCurrentRealTime();
+      
+      // 只有在没有生成聚类或者当前时间步超出新范围时才重置当前时间步
+      if (!this.clustersGenerated || this.currentTimeStep < timeRange.start || this.currentTimeStep > timeRange.end) {
+        this.currentTimeStep = timeRange.start;
+        // 更新当前真实时间
+        this.updateCurrentRealTime();
+      }
+      
       console.log('设置时间范围:', timeRange);
     },
     
@@ -202,6 +264,87 @@ export default {
       this.clearClusterData();
       // 更新聚类基础真实时间
       this.updateClusterBaseRealTime();
+    },
+
+    // 切换聚类时间选择模式
+    onClusterModeChange() {
+      this.clusterErrorMessage = '';
+      if (this.useRealTimeForCluster) {
+        // 如果切换到真实时间模式，使用当前时间步对应的真实时间作为初始值
+        this.initializeClusterRealTimeInputs();
+      }
+    },
+
+    // 初始化聚类真实时间输入框
+    async initializeClusterRealTimeInputs() {
+      try {
+        const realTime = await timeConverter.convertTimeStep(this.clusterBaseTimeStep);
+        this.parseClusterDateTime(realTime);
+      } catch (error) {
+        console.error('初始化聚类真实时间输入失败:', error);
+        // 设置默认值
+        this.clusterRealDate = '2019-01-02';
+        this.clusterRealTime = '09:30';
+      }
+    },
+
+    // 解析聚类日期时间字符串
+    parseClusterDateTime(dateTimeStr) {
+      // dateTimeStr格式: "2019-01-02 09:30:00"
+      if (!dateTimeStr) return;
+      
+      const [date, time] = dateTimeStr.split(' ');
+      const timeOnly = time.substring(0, 5); // 提取HH:MM部分
+      
+      this.clusterRealDate = date;
+      this.clusterRealTime = timeOnly;
+    },
+
+    // 从真实时间更新聚类基础时间
+    async updateClusterTimeFromReal() {
+      if (!this.clusterRealDate || !this.clusterRealTime) {
+        return;
+      }
+
+      this.clusterErrorMessage = '';
+
+      try {
+        // 构建完整的日期时间字符串
+        const timeForAPI = `${this.clusterRealDate} ${this.clusterRealTime}`;
+
+        // 调用后端API转换为时间步
+        const response = await axios.post('http://localhost:5050/api/timestep', {
+          time: timeForAPI
+        });
+
+        const newTimeStep = response.data.time_step;
+
+        // 更新时间步
+        this.clusterBaseTimeStep = newTimeStep;
+
+        // 更新真实时间显示
+        await this.updateClusterBaseRealTime();
+
+        // 清除历史聚类数据，因为基础时间改变了
+        this.clearClusterData();
+
+        console.log(`聚类时间转换: ${timeForAPI} -> ${newTimeStep}`);
+
+        // 显示实际使用的时间（四舍五入后的时间）
+        const actualTime = await timeConverter.convertTimeStep(newTimeStep);
+        
+        if (actualTime !== timeForAPI) {
+          console.log(`聚类时间已自动调整: ${timeForAPI} -> ${actualTime}`);
+        }
+
+      } catch (error) {
+        console.error('聚类真实时间转换失败:', error);
+        if (error.response && error.response.data && error.response.data.message) {
+          this.clusterErrorMessage = `时间转换失败: ${error.response.data.message}`;
+        } else {
+          this.clusterErrorMessage = '时间转换失败，请检查时间格式和是否为交易时间';
+        }
+      }
     },
     
     onSkipOptionChange() {
@@ -273,7 +416,12 @@ export default {
         
         this.generateClusterColors();
         this.clustersGenerated = true;
-        // this.currentTimeStep = this.clusterBaseTimeStep;
+        
+        // 更新当前时间步为聚类基础时间步
+        this.currentTimeStep = this.clusterBaseTimeStep;
+        
+        // 更新当前真实时间显示
+        await this.updateCurrentRealTime();
         
         console.log('聚类生成完成:', this.clusterInfo);
         console.log('股票聚类映射:', this.stockClusterMapping);
@@ -571,6 +719,73 @@ export default {
 .cluster-config button:disabled {
   background: #6c757d;
   cursor: not-allowed;
+}
+
+.cluster-time-mode {
+  padding: 8px;
+  background: #f8f9fa;
+  border-radius: 4px;
+  border: 1px solid #e9ecef;
+  margin-bottom: 10px;
+}
+
+.timestep-cluster-mode, .realtime-cluster-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cluster-time-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.cluster-time-input-group label {
+  font-weight: 500;
+  color: #6c757d;
+  font-size: 14px;
+}
+
+.cluster-time-input-group input {
+  padding: 8px 12px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: border-color 0.15s ease-in-out;
+}
+
+.cluster-time-input-group input:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.cluster-time-tips {
+  background: #fff3cd;
+  padding: 8px 10px;
+  border-radius: 4px;
+  border: 1px solid #ffeaa7;
+  font-size: 12px;
+  color: #856404;
+}
+
+.cluster-time-tips p {
+  margin: 0;
+}
+
+.cluster-error-message {
+  background: #f8d7da;
+  padding: 8px 10px;
+  border-radius: 4px;
+  border: 1px solid #f5c6cb;
+  color: #721c24;
+  font-size: 12px;
+}
+
+.cluster-error-message p {
+  margin: 0;
+  font-weight: 500;
 }
 
 .real-time-display {

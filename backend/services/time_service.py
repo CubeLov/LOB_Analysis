@@ -178,43 +178,43 @@ class TimeService:
         # 根据时间确定当天内的步数
         step_in_day = None
         
-        # 盘前时间 09:15:00
-        if hour == 9 and minute == 15:
+        # 盘前时间 09:15:00 (允许09:15前后几分钟的误差)
+        if hour == 9 and 10 <= minute <= 20:
             step_in_day = 0
         # 上午交易时段 09:30-11:30
         elif hour == 9 and minute >= 30:
             minutes_from_930 = minute - 30
-            if minutes_from_930 % 5 != 0:
-                raise ValueError(f"时间 '{time_input}' 不是有效的交易时间点（必须是5分钟的倍数）")
-            step_in_day = 1 + minutes_from_930 // 5
+            # 将分钟四舍五入到最近的5分钟倍数
+            rounded_minutes = round(minutes_from_930 / 5) * 5
+            step_in_day = 1 + rounded_minutes // 5
         elif hour == 10:
             minutes_from_930 = 30 + minute  # 09:30到10:00的30分钟 + 当前分钟
-            if minute % 5 != 0:
-                raise ValueError(f"时间 '{time_input}' 不是有效的交易时间点（必须是5分钟的倍数）")
-            step_in_day = 1 + minutes_from_930 // 5
+            # 将分钟四舍五入到最近的5分钟倍数
+            rounded_minutes = round(minutes_from_930 / 5) * 5
+            step_in_day = 1 + rounded_minutes // 5
         elif hour == 11 and minute <= 30:
             minutes_from_930 = 90 + minute  # 09:30到11:00的90分钟 + 当前分钟
-            if minute % 5 != 0:
-                raise ValueError(f"时间 '{time_input}' 不是有效的交易时间点（必须是5分钟的倍数）")
-            step_in_day = 1 + minutes_from_930 // 5
+            # 将分钟四舍五入到最近的5分钟倍数
+            rounded_minutes = round(minutes_from_930 / 5) * 5
+            step_in_day = 1 + rounded_minutes // 5
         # 下午交易时段 12:57-14:57
         elif hour == 12 and minute >= 57:
             minutes_from_1257 = minute - 57
-            if minutes_from_1257 % 5 != 0:
-                raise ValueError(f"时间 '{time_input}' 不是有效的交易时间点（必须是5分钟的倍数）")
-            step_in_day = 25 + minutes_from_1257 // 5
+            # 将分钟四舍五入到最近的5分钟倍数
+            rounded_minutes = round(minutes_from_1257 / 5) * 5
+            step_in_day = 25 + rounded_minutes // 5
         elif hour == 13:
             minutes_from_1257 = 3 + minute  # 12:57到13:00的3分钟 + 当前分钟
-            if (3 + minute) % 5 != 0:
-                raise ValueError(f"时间 '{time_input}' 不是有效的交易时间点（必须是5分钟的倍数）")
-            step_in_day = 25 + minutes_from_1257 // 5
+            # 将分钟四舍五入到最近的5分钟倍数
+            rounded_minutes = round(minutes_from_1257 / 5) * 5
+            step_in_day = 25 + rounded_minutes // 5
         elif hour == 14 and minute <= 57:
             minutes_from_1257 = 63 + minute  # 12:57到14:00的63分钟 + 当前分钟
-            if (63 + minute) % 5 != 0:
-                raise ValueError(f"时间 '{time_input}' 不是有效的交易时间点（必须是5分钟的倍数）")
-            step_in_day = 25 + minutes_from_1257 // 5
-        # 盘后时间 15:00:00
-        elif hour == 15 and minute == 0:
+            # 将分钟四舍五入到最近的5分钟倍数
+            rounded_minutes = round(minutes_from_1257 / 5) * 5
+            step_in_day = 25 + rounded_minutes // 5
+        # 盘后时间 15:00:00 (允许15:00前后几分钟的误差)
+        elif hour == 15 and minute <= 5:
             step_in_day = 49
         else:
             raise ValueError(f"时间 '{time_input}' 不在交易时间内")

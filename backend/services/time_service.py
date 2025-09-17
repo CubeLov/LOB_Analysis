@@ -126,6 +126,104 @@ class TimeService:
         self._result_cache.clear()
         logger.info("时间查询缓存已清理")
     
+    def get_time_step(self, time_input: str) -> int:
+        """
+        根据具体时间计算对应的时间步长（timestep）
+        
+        支持的时间格式：
+        - "YYYY-MM-DD HH:MM"
+        - "YYYY-MM-DD HH:MM:SS"
+        
+        交易时间安排（与get_accurate_time保持一致）：
+        - 盘前 09:15:00 对应 timestep % 50 == 0
+        - 上午交易时段：09:30-11:30 对应 timestep % 50 == 1-24
+        - 下午交易时段：12:57-14:57 对应 timestep % 50 == 25-48
+        - 盘后 15:00:00 对应 timestep % 50 == 49
+        
+        Args:
+            time_input: 时间字符串，格式为"YYYY-MM-DD HH:MM"
+            
+        Returns:
+            对应的时间步长（timestep）
+            
+        Raises:
+            ValueError: 当输入时间格式无效、不是交易日或不在交易时间内时
+        """
+        try:
+            # 尝试解析不同的时间格式
+            if len(time_input.split()) == 2 and len(time_input.split()[1].split(':')) == 2:
+                # 格式："YYYY-MM-DD HH:MM"
+                input_time = datetime.strptime(time_input, "%Y-%m-%d %H:%M")
+            else:
+                raise ValueError("时间格式无效")
+        except ValueError as e:
+            raise ValueError(f"无法解析时间格式 '{time_input}'，支持格式: 'YYYY-MM-DD HH:MM' 或 'YYYY-MM-DD HH:MM:SS'")
+        
+        # 检查是否为交易日
+        input_date = input_time.date()
+        trading_day_index = None
+        
+        for i, trading_day in enumerate(self.trading_days):
+            if trading_day.date() == input_date:
+                trading_day_index = i
+                break
+        
+        if trading_day_index is None:
+            raise ValueError(f"'{input_date}' 不是交易日")
+        
+        # 提取时间部分
+        hour = input_time.hour
+        minute = input_time.minute
+        
+        # 根据时间确定当天内的步数
+        step_in_day = None
+        
+        # 盘前时间 09:15:00
+        if hour == 9 and minute == 15:
+            step_in_day = 0
+        # 上午交易时段 09:30-11:30
+        elif hour == 9 and minute >= 30:
+            minutes_from_930 = minute - 30
+            if minutes_from_930 % 5 != 0:
+                raise ValueError(f"时间 '{time_input}' 不是有效的交易时间点（必须是5分钟的倍数）")
+            step_in_day = 1 + minutes_from_930 // 5
+        elif hour == 10:
+            minutes_from_930 = 30 + minute  # 09:30到10:00的30分钟 + 当前分钟
+            if minute % 5 != 0:
+                raise ValueError(f"时间 '{time_input}' 不是有效的交易时间点（必须是5分钟的倍数）")
+            step_in_day = 1 + minutes_from_930 // 5
+        elif hour == 11 and minute <= 30:
+            minutes_from_930 = 90 + minute  # 09:30到11:00的90分钟 + 当前分钟
+            if minute % 5 != 0:
+                raise ValueError(f"时间 '{time_input}' 不是有效的交易时间点（必须是5分钟的倍数）")
+            step_in_day = 1 + minutes_from_930 // 5
+        # 下午交易时段 12:57-14:57
+        elif hour == 12 and minute >= 57:
+            minutes_from_1257 = minute - 57
+            if minutes_from_1257 % 5 != 0:
+                raise ValueError(f"时间 '{time_input}' 不是有效的交易时间点（必须是5分钟的倍数）")
+            step_in_day = 25 + minutes_from_1257 // 5
+        elif hour == 13:
+            minutes_from_1257 = 3 + minute  # 12:57到13:00的3分钟 + 当前分钟
+            if (3 + minute) % 5 != 0:
+                raise ValueError(f"时间 '{time_input}' 不是有效的交易时间点（必须是5分钟的倍数）")
+            step_in_day = 25 + minutes_from_1257 // 5
+        elif hour == 14 and minute <= 57:
+            minutes_from_1257 = 63 + minute  # 12:57到14:00的63分钟 + 当前分钟
+            if (63 + minute) % 5 != 0:
+                raise ValueError(f"时间 '{time_input}' 不是有效的交易时间点（必须是5分钟的倍数）")
+            step_in_day = 25 + minutes_from_1257 // 5
+        # 盘后时间 15:00:00
+        elif hour == 15 and minute == 0:
+            step_in_day = 49
+        else:
+            raise ValueError(f"时间 '{time_input}' 不在交易时间内")
+        
+        # 计算最终的timestep
+        timestep = trading_day_index * 50 + step_in_day
+        
+        return timestep
+
     def get_cache_stats(self):
         """获取缓存统计信息"""
         return {

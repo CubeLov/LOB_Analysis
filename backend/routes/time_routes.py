@@ -64,4 +64,58 @@ def get_time():
             "error": "服务器内部错误",
             "message": str(e)
         }), 500
+
+
+@time_bp.route('/timestep', methods=['POST'])
+def get_timestep():
+    """
+    根据具体时间获取对应时间步长的API接口
+
+    请求格式：
+    {
+        "time": "2019-01-02 09:30"  # 时间字符串，支持格式："YYYY-MM-DD HH:MM" 
+    }
+
+    响应格式：
+    {
+        "time_step": 1
+    }
+    """
+    try:
+        data = request.get_json()
+        time_input = data.get('time')
+
+        # 参数存在性校验
+        if time_input is None:
+            return jsonify({
+                "error": "缺少time参数",
+                "message": "请提供有效的时间字符串"
+            }), 400
+
+        # 参数类型校验
+        if not isinstance(time_input, str):
+            return jsonify({
+                "error": "time类型错误",
+                "message": "time必须是字符串"
+            }), 400
+        
+        # 调用时间服务获取timestep
+        time_step = time_service.get_time_step(time_input)
+
+        return jsonify({
+            "time_step": time_step
+        })
+
+    except ValueError as e:
+        logger.warning(f"时间格式或范围错误: {e}")
+        return jsonify({
+            "error": "参数错误",
+            "message": str(e)
+        }), 400
+    except Exception as e:
+        logger.error(f"处理时间步长查询请求失败: {e}")
+        return jsonify({
+            "error": "服务器内部错误",
+            "message": str(e)
+        }), 500
     

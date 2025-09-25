@@ -27,7 +27,7 @@ class TimeService:
         
         # 基准日期（2019年1月2日是周三，交易日）
         base_date = datetime(2019, 1, 2)
-        # 计算到2026年底，确保有足够的交易日
+        # 计算到2020年底，确保有足够的交易日
         end_date = datetime(2020, 12, 31)
         
         self.trading_days = []
@@ -68,7 +68,7 @@ class TimeService:
         交易时间安排：
         - 每天第一个时间步(0, 49, 98, ...）表示盘前 09:15:00
         - 上午交易时段：09:30-11:30 (24个时间步)
-        - 下午交易时段：12:57-14:57 (24个时间步)
+        - 下午交易时段：13:00-15:00 (24个时间步)
         - 盘后交易时间：15:00 (1个时间步)
         - 每个时间步代表5分钟
         - 自动跳过周末和中国法定节假日
@@ -108,7 +108,7 @@ class TimeService:
         elif 25 <= step_in_day <= 48:
             # 下午交易时段 13:00-15:00
             minutes_from_1257 = (step_in_day - 25) * 5
-            result_time = current_date.replace(hour=12, minute=57, second=0) + timedelta(minutes=minutes_from_1257)
+            result_time = current_date.replace(hour=13, minute=0, second=0) + timedelta(minutes=minutes_from_1257)
         else:
             # 盘后时间
             result_time = current_date.replace(hour=15, minute=0, second=0)
@@ -137,7 +137,7 @@ class TimeService:
         交易时间安排（与get_accurate_time保持一致）：
         - 盘前 09:15:00 对应 timestep % 50 == 0
         - 上午交易时段：09:30-11:30 对应 timestep % 50 == 1-24
-        - 下午交易时段：12:57-14:57 对应 timestep % 50 == 25-48
+        - 下午交易时段：13:00-15:00 对应 timestep % 50 == 25-48
         - 盘后 15:00:00 对应 timestep % 50 == 49
         
         Args:
@@ -197,21 +197,16 @@ class TimeService:
             # 将分钟四舍五入到最近的5分钟倍数
             rounded_minutes = round(minutes_from_930 / 5) * 5
             step_in_day = 1 + rounded_minutes // 5
-        # 下午交易时段 12:57-14:57
-        elif hour == 12 and minute >= 57:
-            minutes_from_1257 = minute - 57
-            # 将分钟四舍五入到最近的5分钟倍数
-            rounded_minutes = round(minutes_from_1257 / 5) * 5
-            step_in_day = 25 + rounded_minutes // 5
+        # 下午交易时段 13:00-15:00
         elif hour == 13:
-            minutes_from_1257 = 3 + minute  # 12:57到13:00的3分钟 + 当前分钟
+            minutes_from_130 = minute  
             # 将分钟四舍五入到最近的5分钟倍数
-            rounded_minutes = round(minutes_from_1257 / 5) * 5
+            rounded_minutes = round(minutes_from_130 / 5) * 5
             step_in_day = 25 + rounded_minutes // 5
-        elif hour == 14 and minute <= 57:
-            minutes_from_1257 = 63 + minute  # 12:57到14:00的63分钟 + 当前分钟
+        elif hour == 14 and minute <= 60:
+            minutes_from_130 = 60 + minute  # 13:00到14:00的60分钟 + 当前分钟
             # 将分钟四舍五入到最近的5分钟倍数
-            rounded_minutes = round(minutes_from_1257 / 5) * 5
+            rounded_minutes = round(minutes_from_130 / 5) * 5
             step_in_day = 25 + rounded_minutes // 5
         # 盘后时间 15:00:00 (允许15:00前后几分钟的误差)
         elif hour == 15 and minute <= 5:

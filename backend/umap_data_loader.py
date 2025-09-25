@@ -177,7 +177,7 @@ class UMAPDataLoader:
             df = pd.read_csv(file_path)
             
             # 检查必要的列是否存在
-            required_columns = ['UMAP1', 'UMAP2', 'TimeStep']
+            required_columns = ['umap1', 'umap2', 'timestep']
             missing_columns = [col for col in required_columns if col not in df.columns]
             
             if missing_columns:

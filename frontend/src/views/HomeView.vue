@@ -18,17 +18,45 @@
       <div class="control-section">
         <h3>2. 聚类配置</h3>
         <div class="cluster-config">
-          <div class="cluster-time-mode">
-            <label class="checkbox-container">
-              <input 
-                type="checkbox" 
-                v-model="useRealTimeForCluster"
-                @change="onClusterModeChange"
-              />
-              <span class="checkmark"></span>
-              使用真实时间选择
-            </label>
+          <div class="cluster-mode-selection">
+            <label class="radio-group-label">聚类模式：</label>
+            <div class="radio-group">
+              <label class="radio-container">
+                <input 
+                  type="radio" 
+                  v-model="clusterMode"
+                  value="time"
+                  @change="onClusterModeTypeChange"
+                />
+                <span class="radio-checkmark"></span>
+                时间基础聚类
+              </label>
+              <label class="radio-container">
+                <input 
+                  type="radio" 
+                  v-model="clusterMode"
+                  value="industry"
+                  @change="onClusterModeTypeChange"
+                />
+                <span class="radio-checkmark"></span>
+                行业聚类
+              </label>
+            </div>
           </div>
+
+          <!-- 时间基础聚类配置 -->
+          <div v-if="clusterMode === 'time'" class="time-cluster-config">
+            <div class="cluster-time-mode">
+              <label class="checkbox-container">
+                <input 
+                  type="checkbox" 
+                  v-model="useRealTimeForCluster"
+                  @change="onClusterModeChange"
+                />
+                <span class="checkmark"></span>
+                使用真实时间选择
+              </label>
+            </div>
 
           <!-- 时间步选择模式 -->
           <div v-if="!useRealTimeForCluster" class="timestep-cluster-mode">
@@ -75,15 +103,36 @@
             </div>
           </div>
           
-          <div v-if="clusterBaseRealTime" class="real-time-display">
+          <div v-if="clusterBaseRealTime && clusterMode === 'time'" class="real-time-display">
             实际使用时间: {{ clusterBaseRealTime }}
           </div>
 
           <div v-if="clusterErrorMessage" class="cluster-error-message">
             <p>{{ clusterErrorMessage }}</p>
           </div>
+          </div>
 
-          <button @click="generateClusters" :disabled="!selectedStocks.length">生成聚类</button>
+          <!-- 行业聚类配置 -->
+          <div v-if="clusterMode === 'industry'" class="industry-cluster-config">
+            <div class="industry-cluster-info">
+              <p>行业聚类模式：根据股票所属行业进行分组，同一行业的股票将显示为相同颜色</p>
+              <p v-if="selectedStocks.length">已选择股票的行业分布：</p>
+              <div v-if="selectedStocks.length" class="industry-distribution">
+                <div 
+                  v-for="(count, industry) in getSelectedStocksIndustryDistribution()" 
+                  :key="industry"
+                  class="industry-item"
+                >
+                  <span class="industry-name">{{ industry }}</span>
+                  <span class="industry-count">({{ count }}只)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <button @click="generateClusters" :disabled="!selectedStocks.length">
+            {{ clusterMode === 'industry' ? '生成行业聚类' : '生成聚类' }}
+          </button>
         </div>
       </div>
 
@@ -132,6 +181,8 @@
         :stockNames="stockNames"
         :stockIndustries="stockIndustries"
         :formatStockCode="formatStockCode"
+        :clusterMode="clusterMode"
+        :industryClusterMap="industryClusterMap"
       />
     </div>
   </div>
@@ -174,7 +225,9 @@ export default {
       useRealTimeForCluster: false, // 是否使用真实时间选择聚类基础时间
       clusterRealDate: '2019-01-02', // 聚类基础日期
       clusterRealTime: '09:30',    // 聚类基础时间
-      clusterErrorMessage: ''      // 聚类时间转换错误信息
+      clusterErrorMessage: '',     // 聚类时间转换错误信息
+      clusterMode: 'time',         // 聚类模式：'time' 或 'industry'
+      industryClusterMap: {}       // 行业名称到聚类ID的映射
     };
   },
   methods: {
@@ -241,6 +294,23 @@ export default {
       // 清除历史聚类数据，因为股票选择改变了
       this.clearClusterData();
       console.log('选择的股票:', selectedStocks);
+    },
+
+    // 获取选中股票的行业分布
+    getSelectedStocksIndustryDistribution() {
+      const distribution = {};
+      this.selectedStocks.forEach(stockCode => {
+        const industry = this.stockIndustries[stockCode] || '未知行业';
+        distribution[industry] = (distribution[industry] || 0) + 1;
+      });
+      return distribution;
+    },
+
+    // 聚类模式类型改变处理
+    onClusterModeTypeChange() {
+      // 清除历史聚类数据，因为聚类模式改变了
+      this.clearClusterData();
+      console.log('聚类模式改变为:', this.clusterMode);
     },
     
     setTimeRange(timeRange) {
@@ -387,46 +457,120 @@ export default {
       }
       
       try {
-        console.log('生成聚类，选择的股票:', this.selectedStocks, '时间步:', this.clusterBaseTimeStep);
-        
         // 清除历史聚类数据
         this.clearClusterData();
-        
-        const response = await axios.post('http://localhost:5050/api/coordinates/cluster', {
-          stock_codes: this.selectedStocks,
-          time_step: this.clusterBaseTimeStep
-        });
-        
-        console.log('聚类响应:', response.data);
-        
-        this.clusterInfo = response.data.cluster_info;
-        this.coordinates = response.data.coordinates;
-        
-        // 保存股票到聚类的映射关系
-        this.stockClusterMapping = {};
-        Object.keys(this.coordinates).forEach(stockCode => {
-          const coord = this.coordinates[stockCode];
-          if (coord && coord.cluster_id !== undefined) {
-            this.stockClusterMapping[stockCode] = coord.cluster_id;
-          }
-        });
-        
-        this.generateClusterColors();
-        this.clustersGenerated = true;
-        
-        // 更新当前时间步为聚类基础时间步
-        this.currentTimeStep = this.clusterBaseTimeStep;
-        
-        // 更新当前真实时间显示
-        await this.updateCurrentRealTime();
-        
-        console.log('聚类生成完成:', this.clusterInfo);
-        console.log('股票聚类映射:', this.stockClusterMapping);
-        console.log('初始坐标:', this.coordinates);
+
+        if (this.clusterMode === 'industry') {
+          // 行业聚类模式
+          await this.generateIndustryClusters();
+        } else {
+          // 时间基础聚类模式
+          await this.generateTimeClusters();
+        }
       } catch (error) {
         console.error('生成聚类失败:', error);
         alert('生成聚类失败: ' + error.message);
       }
+    },
+
+    // 生成时间基础聚类
+    async generateTimeClusters() {
+      console.log('生成时间基础聚类，选择的股票:', this.selectedStocks, '时间步:', this.clusterBaseTimeStep);
+      
+      const response = await axios.post('http://localhost:5050/api/coordinates/cluster', {
+        stock_codes: this.selectedStocks,
+        time_step: this.clusterBaseTimeStep
+      });
+      
+      console.log('时间聚类响应:', response.data);
+      
+      this.clusterInfo = response.data.cluster_info;
+      this.coordinates = response.data.coordinates;
+      
+      // 保存股票到聚类的映射关系
+      this.stockClusterMapping = {};
+      Object.keys(this.coordinates).forEach(stockCode => {
+        const coord = this.coordinates[stockCode];
+        if (coord && coord.cluster_id !== undefined) {
+          this.stockClusterMapping[stockCode] = coord.cluster_id;
+        }
+      });
+      
+      this.generateClusterColors();
+      this.clustersGenerated = true;
+      
+      // 更新当前时间步为聚类基础时间步
+      this.currentTimeStep = this.clusterBaseTimeStep;
+      
+      // 更新当前真实时间显示
+      await this.updateCurrentRealTime();
+      
+      console.log('时间聚类生成完成:', this.clusterInfo);
+      console.log('股票聚类映射:', this.stockClusterMapping);
+    },
+
+    // 生成行业聚类
+    async generateIndustryClusters() {
+      console.log('生成行业聚类，选择的股票:', this.selectedStocks);
+      
+      // 首先获取坐标数据（使用当前时间步或默认时间步）
+      const currentTimeStep = this.clusterBaseTimeStep;
+      const response = await axios.post('http://localhost:5050/api/coordinates', {
+        stock_codes: this.selectedStocks,
+        time_step: currentTimeStep
+      });
+      
+      console.log('行业聚类坐标响应:', response.data);
+      
+      this.coordinates = response.data.coordinates;
+      
+      // 创建行业到聚类ID的映射
+      const industryToClusterId = {};
+      const industries = new Set();
+      let clusterIdCounter = 0;
+      
+      // 按行业分组股票
+      this.stockClusterMapping = {};
+      Object.keys(this.coordinates).forEach(stockCode => {
+        const industry = this.stockIndustries[stockCode] || '未知行业';
+        industries.add(industry);
+        
+        if (!(industry in industryToClusterId)) {
+          industryToClusterId[industry] = clusterIdCounter++;
+        }
+        
+        const clusterId = industryToClusterId[industry];
+        this.stockClusterMapping[stockCode] = clusterId;
+        
+        // 为坐标数据添加聚类ID
+        if (this.coordinates[stockCode]) {
+          this.coordinates[stockCode].cluster_id = clusterId;
+        }
+      });
+      
+      // 创建聚类信息
+      this.clusterInfo = {
+        n_clusters: industries.size,
+        cluster_method: 'industry',
+        industries: Array.from(industries),
+        industry_mapping: industryToClusterId
+      };
+      
+      // 设置行业聚类映射，供StockChart组件使用
+      this.industryClusterMap = industryToClusterId;
+      
+      this.generateClusterColors();
+      this.clustersGenerated = true;
+      
+      // 更新当前时间步
+      this.currentTimeStep = currentTimeStep;
+      
+      // 更新当前真实时间显示
+      await this.updateCurrentRealTime();
+      
+      console.log('行业聚类生成完成:', this.clusterInfo);
+      console.log('行业聚类映射:', this.stockClusterMapping);
+      console.log('行业到聚类ID映射:', industryToClusterId);
     },
     
     clearClusterData() {
@@ -440,6 +584,7 @@ export default {
       this.clusterInfo = {};
       this.clusterColors = {};
       this.stockClusterMapping = {};
+      this.industryClusterMap = {};
       this.clustersGenerated = false;
       this.currentTimeStep = 0;
       this.currentRealTime = '';
@@ -495,7 +640,7 @@ export default {
         // 获取新的坐标数据
         const newCoordinates = response.data.coordinates;
         
-        // 将保存的聚类信息应用到新坐标中
+        // 应用聚类信息到新坐标中
         Object.keys(newCoordinates).forEach(stockCode => {
           if (this.stockClusterMapping[stockCode] !== undefined) {
             newCoordinates[stockCode].cluster_id = this.stockClusterMapping[stockCode];
@@ -503,7 +648,9 @@ export default {
         });
         
         this.coordinates = newCoordinates;
-        console.log(`时间步 ${timeStep} 的坐标:`, this.coordinates);
+        
+        const clusterType = this.clusterMode === 'industry' ? '行业聚类' : '时间聚类';
+        console.log(`时间步 ${timeStep} 的坐标 (${clusterType}):`, this.coordinates);
       } catch (error) {
         console.error('获取坐标失败:', error);
         // 如果请求失败，不阻塞播放，继续到下一个时间步
@@ -853,5 +1000,98 @@ export default {
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
   overflow: hidden;
+}
+
+/* 聚类模式选择样式 */
+.cluster-mode-selection {
+  margin-bottom: 15px;
+  padding: 10px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border: 1px solid #e9ecef;
+}
+
+.radio-group-label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #495057;
+  font-size: 14px;
+}
+
+.radio-group {
+  display: flex;
+  gap: 20px;
+}
+
+.radio-container {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-size: 14px;
+  color: #495057;
+  user-select: none;
+}
+
+.radio-container input[type="radio"] {
+  margin-right: 8px;
+  cursor: pointer;
+  transform: scale(1.1);
+}
+
+.radio-checkmark {
+  margin-left: 0;
+}
+
+/* 时间聚类配置样式 */
+.time-cluster-config {
+  margin-bottom: 15px;
+}
+
+/* 行业聚类配置样式 */
+.industry-cluster-config {
+  margin-bottom: 15px;
+}
+
+.industry-cluster-info {
+  padding: 12px;
+  background: #e8f5e8;
+  border-radius: 6px;
+  border-left: 4px solid #28a745;
+  font-size: 13px;
+  color: #155724;
+}
+
+.industry-cluster-info p {
+  margin: 0 0 8px 0;
+}
+
+.industry-cluster-info p:last-child {
+  margin-bottom: 0;
+}
+
+.industry-distribution {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.industry-item {
+  background: #d4edda;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  border: 1px solid #c3e6cb;
+}
+
+.industry-name {
+  font-weight: 500;
+  color: #155724;
+}
+
+.industry-count {
+  color: #6c757d;
+  font-weight: normal;
 }
 </style>

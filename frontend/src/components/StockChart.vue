@@ -12,7 +12,7 @@
     <div ref="chartContainer" class="chart-container"></div>
     
     <div v-if="Object.keys(clusterColors).length" class="legend-container">
-      <h4>聚类图例</h4>
+      <h4>{{ clusterMode === 'industry' ? '行业' : '聚类' }}图例</h4>
       <div class="legend-items">
         <div 
           v-for="(color, clusterId) in clusterColors" 
@@ -20,7 +20,7 @@
           class="legend-item"
         >
           <div class="legend-color" :style="{ backgroundColor: color }"></div>
-          <span>聚类 {{ clusterId }}</span>
+          <span>{{ getLegendLabel(clusterId) }}</span>
         </div>
       </div>
     </div>
@@ -68,6 +68,14 @@ export default {
     currentRealTime: {
       type: String,
       default: ''
+    },
+    clusterMode: {
+      type: String,
+      default: 'coordinate' // 'coordinate' 或 'industry'
+    },
+    industryClusterMap: {
+      type: Object,
+      default: () => ({}) // 行业名称到聚类ID的映射
     }
   },
   setup(props) {
@@ -111,6 +119,22 @@ export default {
     const formatTimeRange = (startTime, timeStep) => {
       const endTime = calculateEndTime(startTime, timeStep);
       return `${startTime} ~ ${endTime}`;
+    };
+
+    // 获取图例标签
+    const getLegendLabel = (clusterId) => {
+      if (props.clusterMode === 'industry') {
+        // 行业聚类模式：通过聚类ID反向查找行业名称
+        const clusterIdNum = parseInt(clusterId, 10);
+        const industryName = Object.keys(props.industryClusterMap).find(
+          industry => props.industryClusterMap[industry] === clusterIdNum
+        );
+        console.log('HTML图例 - clusterId:', clusterId, 'clusterIdNum:', clusterIdNum, 'found industry:', industryName, 'map:', props.industryClusterMap);
+        return industryName || `聚类 ${clusterId}`;
+      } else {
+        // 坐标聚类模式：使用默认的聚类编号
+        return clusterId === '-1' ? '未分类' : `聚类 ${clusterId}`;
+      }
     };
 
     const drawChart = (coordinates, clusterInfo, clusterColors, animate = false) => {
@@ -185,12 +209,26 @@ export default {
           const group = clusterGroups[clusterId];
           const color = clusterColors[clusterId] || '#999999';
           
+          // 根据聚类模式决定显示的名称
+          let displayName;
+          if (props.clusterMode === 'industry') {
+            // 行业聚类模式：通过聚类ID反向查找行业名称
+            const clusterIdNum = parseInt(clusterId, 10);
+            const industryName = Object.keys(props.industryClusterMap).find(
+              industry => props.industryClusterMap[industry] === clusterIdNum
+            );
+            displayName = industryName || `聚类 ${clusterId}`;
+          } else {
+            // 坐标聚类模式：使用默认的聚类编号
+            displayName = clusterId === '-1' ? '未分类' : `聚类 ${clusterId}`;
+          }
+          
           return {
             x: group.x,
             y: group.y,
             mode: 'markers+text',
             type: 'scatter',
-            name: clusterId === '-1' ? '未分类' : `聚类 ${clusterId}`,
+            name: displayName,
             text: group.text,        // 图表上显示的文本（只有股票名字）
             customdata: group.stockNames.map((name, index) => [name, group.stockCodes[index], group.stockIndustries[index]]), // 传递股票名字、代码和行业
             textposition: 'top center',
@@ -221,8 +259,8 @@ export default {
         const layout = {
           title: {
             text: props.currentRealTime ? 
-              `股票聚类分布 (${formatTimeRange(props.currentRealTime, props.currentTimeStep ?? 0)})` : 
-              `股票聚类分布 (时间步: ${props.currentTimeStep ?? '未知'})`,
+              `股票${props.clusterMode === 'industry' ? '行业' : '聚类'}分布 (${formatTimeRange(props.currentRealTime, props.currentTimeStep ?? 0)})` : 
+              `股票${props.clusterMode === 'industry' ? '行业' : '聚类'}分布 (时间步: ${props.currentTimeStep ?? '未知'})`,
             font: { size: 16 }
           },
           xaxis: { 
@@ -316,7 +354,7 @@ export default {
       { immediate: true, deep: true }
     );
 
-    return { chartContainer };
+    return { chartContainer, getLegendLabel };
   }
 };
 </script>

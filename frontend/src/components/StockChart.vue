@@ -57,6 +57,10 @@ export default {
       type: Object,
       default: () => ({})
     },
+    stockIndustries: {
+      type: Object,
+      default: () => ({})
+    },
     formatStockCode: {
       type: Function,
       required: true
@@ -155,6 +159,7 @@ export default {
               text: [],           // 图表上显示的文本（股票名字）
               stockNames: [],     // 悬停时显示的股票名字
               stockCodes: [],     // 悬停时显示的股票代码
+              stockIndustries: [], // 悬停时显示的股票行业
               originalCodes: []   // 原始股票代码（用于内部处理）
             };
           }
@@ -164,12 +169,14 @@ export default {
           
           const stockName = props.stockNames[stockCode] || stockCode;
           const formattedCode = props.formatStockCode(stockCode);
+          const stockIndustry = props.stockIndustries[stockCode] || '未知行业';
           
           // 图表上显示股票名字
           clusterGroups[clusterId].text.push(stockName);
-          // 悬停时分别存储股票名字和代码
+          // 悬停时分别存储股票名字、代码和行业
           clusterGroups[clusterId].stockNames.push(stockName);
           clusterGroups[clusterId].stockCodes.push(formattedCode);
+          clusterGroups[clusterId].stockIndustries.push(stockIndustry);
           clusterGroups[clusterId].originalCodes.push(stockCode);
         });
 
@@ -185,7 +192,7 @@ export default {
             type: 'scatter',
             name: clusterId === '-1' ? '未分类' : `聚类 ${clusterId}`,
             text: group.text,        // 图表上显示的文本（只有股票名字）
-            customdata: group.stockNames.map((name, index) => [name, group.stockCodes[index]]), // 传递股票名字和代码
+            customdata: group.stockNames.map((name, index) => [name, group.stockCodes[index], group.stockIndustries[index]]), // 传递股票名字、代码和行业
             textposition: 'top center',
             textfont: {
               size: 10,
@@ -203,6 +210,7 @@ export default {
             hovertemplate: 
               '<b>%{customdata[0]}</b><br>' +
               '股票代码: %{customdata[1]}<br>' +
+              '所属行业: %{customdata[2]}<br>' +
               'UMAP1: %{x:.2f}<br>' +
               'UMAP2: %{y:.2f}<br>' +
               '聚类: ' + (clusterId === '-1' ? '未分类' : clusterId) +

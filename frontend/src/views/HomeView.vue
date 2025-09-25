@@ -130,6 +130,7 @@
         :selectedStocks="selectedStocks"
         :clusterColors="clusterColors"
         :stockNames="stockNames"
+        :stockIndustries="stockIndustries"
         :formatStockCode="formatStockCode"
       />
     </div>
@@ -155,6 +156,7 @@ export default {
     return {
       stocks: [],                  // 从后端获取的股票代码列表
       stockNames: {},              // 股票代码到股票名字的映射
+      stockIndustries: {},         // 股票代码到行业的映射
       selectedStocks: [],          // 用户选择的股票集合
       clusterBaseTimeStep: 0,      // 聚类基础时间步
       timeRange: { start: 0, end: 10 }, // 播放时间范围
@@ -196,46 +198,41 @@ export default {
         const stockCodes = response.data.stock_codes || [];
         this.stocks = stockCodes;
         
-        // 获取每个股票的详细信息（包括股票名字）
-        console.log('开始获取股票名字信息...');
-        const stockNamePromises = stockCodes.map(async (stockCode) => {
+        // 获取每个股票的详细信息（包括股票名字和行业）
+        console.log('开始获取股票详细信息...');
+        const stockInfoPromises = stockCodes.map(async (stockCode) => {
           try {
             const infoResponse = await axios.get(`http://localhost:5050/api/stock/${stockCode}/info`);
             return {
               code: stockCode,
-              name: infoResponse.data.stock_name || stockCode
+              name: infoResponse.data.stock_name || stockCode,
+              industry: infoResponse.data.industry || '未知行业'
             };
           } catch (error) {
             console.warn(`获取股票${stockCode}信息失败:`, error.message);
             return {
               code: stockCode,
-              name: stockCode // 如果获取失败，使用代码作为名字
+              name: stockCode, // 如果获取失败，使用代码作为名字
+              industry: '未知行业'
             };
           }
         });
         
-        const stockInfos = await Promise.all(stockNamePromises);
+        const stockInfos = await Promise.all(stockInfoPromises);
         
-        // 构建股票名字映射
+        // 构建股票名字和行业映射
         this.stockNames = {};
+        this.stockIndustries = {};
         stockInfos.forEach(info => {
           this.stockNames[info.code] = info.name;
+          this.stockIndustries[info.code] = info.industry;
         });
         
         console.log('获取到股票数量:', this.stocks.length);
         console.log('股票名字映射:', this.stockNames);
+        console.log('股票行业映射:', this.stockIndustries);
       } catch (error) {
         console.error('无法获取股票列表:', error);
-        // 如果后端不可用，使用测试数据
-        this.stocks = ['sz000001', 'sz000002', 'sz000007', 'sz000021', 'sz000027'];
-        // 为测试数据设置默认名字
-        this.stockNames = {
-          'sz000001': '平安银行',
-          'sz000002': '万科A',
-          'sz000007': '全新好',
-          'sz000021': '深科技',
-          'sz000027': '深圳能源'
-        };
       }
     },
     

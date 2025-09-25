@@ -83,7 +83,8 @@ class UMAPCoordinateService:
                     MIN(u.umap2) as min_umap2,
                     MAX(u.umap2) as max_umap2,
                     AVG(u.umap2) as avg_umap2,
-                    MAX(s.a_stock_name) as stock_name
+                    MAX(s.a_stock_name) as stock_name,
+                    MAX(s.industry) as industry
                 FROM umap_coordinates u JOIN stock_list s ON u.stock_id = s.a_stock_code
                 WHERE u.stock_id = %s
                 """
@@ -95,6 +96,7 @@ class UMAPCoordinateService:
                     return {
                         "stock_code": stock_code,
                         "stock_name": result['stock_name'],
+                        "industry": result['industry'],
                         "total_time_steps": int(result['total_time_steps']),
                         "time_step_range": {
                             "min": int(result['min_timestep']),

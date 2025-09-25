@@ -70,6 +70,45 @@ export default {
     const chartContainer = ref(null);
     let isInitialized = false;
 
+    const calculateEndTime = (startTime, timeStep) => {
+      try {
+        // 分割日期和时间部分 "YYYY-MM-DD HH:MM"
+        const [datePart, timePart] = startTime.split(' ');
+        if (!datePart || !timePart) {
+          return startTime; // 格式不正确时返回原始值
+        }
+        
+        // 分割年月日
+        const [year, month, day] = datePart.split('-').map(Number);
+        // 分割小时和分钟
+        const [hours, minutes] = timePart.split(':').map(Number);
+        
+        // 确定需要添加的分钟数
+        const minutesToAdd = (timeStep % 50 === 0) ? 15 : 5;
+        
+        // 计算总分钟数并处理进位
+        let totalMinutes = hours * 60 + minutes + minutesToAdd;
+        let newHours = Math.floor(totalMinutes / 60);
+        let newMinutes = totalMinutes % 60;
+        let newDay = day;
+        
+        // 格式化数字为两位数
+        const pad = (num) => num.toString().padStart(2, '0');
+        
+        // 组合成新的时间字符串
+        return `${year}-${pad(month)}-${pad(newDay)} ${pad(newHours)}:${pad(newMinutes)}`;
+      } catch (error) {
+        console.error('计算结束时间失败:', error);
+        return startTime;
+      }
+    };
+
+    // 格式化时间段显示
+    const formatTimeRange = (startTime, timeStep) => {
+      const endTime = calculateEndTime(startTime, timeStep);
+      return `${startTime} ~ ${endTime}`;
+    };
+
     const drawChart = (coordinates, clusterInfo, clusterColors, animate = false) => {
       nextTick(() => {
         if (!chartContainer.value) {
@@ -174,7 +213,7 @@ export default {
         const layout = {
           title: {
             text: props.currentRealTime ? 
-              `股票聚类分布 (${props.currentRealTime})` : 
+              `股票聚类分布 (${formatTimeRange(props.currentRealTime, props.currentTimeStep ?? 0)})` : 
               `股票聚类分布 (时间步: ${props.currentTimeStep ?? '未知'})`,
             font: { size: 16 }
           },
